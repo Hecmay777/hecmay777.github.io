@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Calculadora de comisiones</title>
+<style>
+  /* Herramienta de una columna: resultado arriba, hojas de descarga debajo */
+  :root {
+    --mar-oscuro: #0b3c5d;
+    --mar: #1167a8;
+    --turquesa: #1fb5c4;
+    --fondo: #eef4f8;
+    --panel: #ffffff;
+    --campo: #f8fbfd;
+    --borde: #d9e4ec;
+    --texto: #12263a;
+    --suave: #4f6378;
+    --acento: #1167a8;
+    --ok: #1a8f47;
+    --ok-fondo: #e3f4ea;
+    --aviso: #a15c00;
+    --aviso-fondo: #fdf1dd;
+    --sobre: #ffffff;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #061826;
+      --panel: #0f2a40;
+      --campo: #12324b;
+      --borde: #23496a;
+      --texto: #e8f1f8;
+      --suave: #a5bccf;
+      --acento: #5fc8e0;
+      --ok: #5fd08f;
+      --ok-fondo: #12392a;
+      --aviso: #f2b562;
+      --aviso-fondo: #3b2a10;
+      color-scheme: dark;
+    }
+  }
+  [hidden] { display: none !important; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--fondo);
+    color: var(--texto);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.45;
+    padding-block: 0 40px;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  header {
+    background: linear-gradient(120deg, var(--mar-oscuro), var(--mar));
+    color: var(--sobre);
+    padding-top: calc(20px + env(safe-area-inset-top, 0px));
+    padding-bottom: 76px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .cabeza { max-width: 560px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  header h1 { font-size: 20px; font-weight: 700; }
+  header p { font-size: 14px; opacity: .85; }
+  .envoltorio {
+    max-width: 560px;
+    margin: -60px auto 0;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid;
+    gap: 14px;
+  }
+  .panel { background: var(--panel); border: 1px solid var(--borde); border-radius: 18px; padding: 18px; }
+  .resultado { box-shadow: 0 18px 40px -24px rgba(11,60,93,.6); }
+  .etiqueta { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--suave); }
+  .grande { font-size: 44px; font-weight: 700; line-height: 1.1; margin-top: 2px; }
+  .linea { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--borde); font-size: 15px; }
+  .linea:first-of-type { margin-top: 12px; }
+  .linea span:last-child { font-weight: 600; }
+  .barra { height: 10px; border-radius: 99px; background: var(--campo); border: 1px solid var(--borde); overflow: hidden; margin-top: 14px; }
+  .barra div { height: 100%; width: 0; background: linear-gradient(90deg, var(--mar), var(--turquesa)); transition: width .3s; }
+  .estado { margin-top: 10px; font-size: 14px; padding: 8px 12px; border-radius: 10px; }
+  .estado.bajo { background: var(--aviso-fondo); color: var(--aviso); }
+  .estado.alto { background: var(--ok-fondo); color: var(--ok); }
+  h2 { font-size: 17px; font-weight: 700; }
+  .ayuda { font-size: 14px; color: var(--suave); margin-top: 2px; }
+  form.alta { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 12px; align-items: end; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--suave); min-width: 0; }
+  input {
+    font: inherit; font-size: 16px; color: var(--texto);
+    background: var(--campo); border: 1px solid var(--borde); border-radius: 10px;
+    padding: 10px 12px; width: 100%; min-width: 0;
+  }
+  input:focus-visible, button:focus-visible { outline: 3px solid var(--turquesa); outline-offset: 1px; }
+  button { font: inherit; cursor: pointer; border: none; border-radius: 10px; font-weight: 600; }
+  .principal { background: var(--mar); color: var(--sobre); padding: 11px 16px; }
+  .secundario { background: transparent; color: var(--acento); border: 1px solid var(--borde); padding: 9px 14px; font-size: 14px; }
+  .borrar { background: transparent; color: var(--suave); width: 36px; height: 36px; font-size: 20px; line-height: 1; }
+  .borrar:hover { color: var(--aviso); background: var(--campo); }
+  ul.hojas { list-style: none; margin-top: 12px; }
+  ul.hojas li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--borde); }
+  ul.hojas li.repetida .fecha::after { content: " · fecha repetida"; color: var(--aviso); font-size: 13px; font-weight: 600; }
+  .fecha { font-size: 15px; }
+  .pts { font-weight: 600; }
+  .vacio { margin-top: 12px; padding: 14px; border: 1px dashed var(--borde); border-radius: 12px; font-size: 14px; color: var(--suave); }
+  .quincenas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .quincenas div { background: var(--campo); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
+  .quincenas strong { display: block; font-size: 17px; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .ajustes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  details summary { cursor: pointer; font-weight: 700; font-size: 17px; }
+  .confirmar { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--aviso-fondo); color: var(--aviso); font-size: 14px; display: grid; gap: 8px; }
+  .confirmar div { display: flex; gap: 8px; flex-wrap: wrap; }
+  @media (max-width: 420px) {
+    form.alta { grid-template-columns: 1fr 1fr; }
+    form.alta .principal { grid-column: 1 / -1; }
+    .ajustes { grid-template-columns: 1fr; }
+    .grande { font-size: 38px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .barra div { transition: none; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="cabeza">
+    <div>
+      <h1>Comisiones del reparto</h1>
+      <p id="mes-texto">Puntos del mes</p>
+    </div>
+  </div>
+</header>
+
+<main class="envoltorio">
+
+  <section class="panel resultado" aria-live="polite">
+    <p class="etiqueta">Comisión del mes</p>
+    <p class="grande num" id="comision">408,00 €</p>
+    <div class="linea"><span>Puntos totales</span><span class="num" id="total">0,00</span></div>
+    <div class="linea"><span>Parte fija (hasta <span id="umbral-txt">6.300</span> pts)</span><span class="num" id="fija">408,00 €</span></div>
+    <div class="linea"><span>Puntos de más × <span id="tarifa-txt">0,192</span> €</span><span class="num" id="extra">0,00 €</span></div>
+    <div class="barra" aria-hidden="true"><div id="barra"></div></div>
+    <p class="estado bajo" id="estado">Te faltan 6.300,00 puntos para empezar a sumar.</p>
+    <p class="ayuda" style="margin-top:10px">Se cobra al mes siguiente.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Hojas de descarga</h2>
+    <p class="ayuda">Apunta la fecha y los puntos (Com. Rep.) de cada hoja.</p>
+    <form class="alta" id="alta">
+      <label for="f-fecha">Fecha<input type="date" id="f-fecha" required></label>
+      <label for="f-puntos">Puntos<input type="text" id="f-puntos" inputmode="decimal" placeholder="Ej. 312,45" required></label>
+      <button class="principal" type="submit">Añadir</button>
+    </form>
+    <div class="quincenas">
+      <div>1.ª quincena<strong class="num" id="q1">0,00</strong></div>
+      <div>2.ª quincena<strong class="num" id="q2">0,00</strong></div>
+    </div>
+    <ul class="hojas" id="lista"></ul>
+    <p class="vacio" id="vacio">Todavía no hay hojas. Añade la primera arriba. Si una fecha se repite, la marco para que no la cuentes dos veces.</p>
+    <div class="acciones">
+      <button class="secundario" type="button" id="b-vaciar">Empezar mes nuevo</button>
+    </div>
+    <div class="confirmar" id="confirmar" hidden>
+      <span>¿Borrar todas las hojas de este mes?</span>
+      <div><button class="principal" type="button" id="b-si">Sí, borrar</button><button class="secundario" type="button" id="b-no">Cancelar</button></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Cálculo rápido</h2>
+    <p class="ayuda">Si ya tienes el total del mes, escríbelo aquí.</p>
+    <label for="f-rapido" style="margin-top:12px">Puntos del mes<input type="text" id="f-rapido" inputmode="decimal" placeholder="Ej. 7854,17"></label>
+    <p class="linea" style="margin-top:12px"><span>Comisión</span><span class="num" id="rapido">—</span></p>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Ajustes de la fórmula</summary>
+      <p class="ayuda" style="margin-top:8px">Cámbialos solo si la empresa cambia las condiciones.</p>
+      <div class="ajustes">
+        <label for="a-base">Fijo (€)<input type="text" id="a-base" inputmode="decimal"></label>
+        <label for="a-umbral">Hasta (puntos)<input type="text" id="a-umbral" inputmode="decimal"></label>
+        <label for="a-tarifa">€ por punto de más<input type="text" id="a-tarifa" inputmode="decimal"></label>
+      </div>
+    </details>
+  </section>
+
+</main>
+
+<script>
+  const POR_DEFECTO = { base: 408, umbral: 6300, tarifa: 0.192 };
+  const CLAVE = "comisiones-reparto-v1";
+
+  // Cálculo: fijo hasta el umbral, y cada punto de más se paga a la tarifa
+  function calcular(puntos, f) {
+    const extraPts = Math.max(0, puntos - f.umbral);
+    return { extraPts, extra: extraPts * f.tarifa, total: f.base + extraPts * f.tarifa };
+  }
+
+  // Acepta "7.854,17", "7854,17" o "7854.17"
+  function leerNumero(txt) {
+    let t = String(txt).trim().replace(/\s/g, "");
+    if (!t) return NaN;
+    if (t.includes(",")) t = t.replace(/\./g, "").replace(",", ".");
+    else if ((t.match(/\./g) || []).length > 1) t = t.replace(/\./g, "");
+    return Number(t);
+  }
+
+  const eur = n => n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  const pts = n => n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fechaBonita = iso => new Date(iso + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+
+  let estado = { hojas: [], formula: { ...POR_DEFECTO } };
+  try {
+    const guardado = JSON.parse(localStorage.getItem(CLAVE));
+    if (guardado && Array.isArray(guardado.hojas)) estado = { hojas: guardado.hojas, formula: { ...POR_DEFECTO, ...guardado.formula } };
+  } catch {}
+  function guardar() { try { localStorage.setItem(CLAVE, JSON.stringify(estado)); } catch {} }
+
+  const $ = id => document.getElementById(id);
+
+  function pintar() {
+    const f = estado.formula;
+    const hojas = [...estado.hojas].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const total = hojas.reduce((s, h) => s + h.puntos, 0);
+    const r = calcular(total, f);
+
+    $("comision").textContent = eur(r.total);
+    $("total").textContent = pts(total);
+    $("fija").textContent = eur(f.base);
+    $("extra").textContent = eur(r.extra);
+    $("umbral-txt").textContent = f.umbral.toLocaleString("es-ES");
+    $("tarifa-txt").textContent = f.tarifa.toLocaleString("es-ES", { maximumFractionDigits: 4 });
+    $("barra").style.width = Math.min(100, f.umbral ? total / f.umbral * 100 : 0) + "%";
+    const est = $("estado");
+    if (total < f.umbral) {
+      est.className = "estado bajo";
+      est.textContent = "Te faltan " + pts(f.umbral - total) + " puntos para empezar a sumar.";
+    } else {
+      est.className = "estado alto";
+      est.textContent = "Llevas " + pts(r.extraPts) + " puntos por encima: +" + eur(r.extra) + ".";
+    }
+
+    const meses = [...new Set(hojas.map(h => h.fecha.slice(0, 7)))];
+    $("mes-texto").textContent = meses.length
+      ? meses.map(m => new Date(m + "-15T12:00:00").toLocaleDateString("es-ES", { month: "long", year: "numeric" })).join(" y ")
+      : "Puntos del mes";
+
+    let q1 = 0, q2 = 0;
+    hojas.forEach(h => { if (Number(h.fecha.slice(8, 10)) <= 15) q1 += h.puntos; else q2 += h.puntos; });
+    $("q1").textContent = pts(q1);
+    $("q2").textContent = pts(q2);
+
+    const cuenta = {};
+    hojas.forEach(h => { cuenta[h.fecha] = (cuenta[h.fecha] || 0) + 1; });
+    const lista = $("lista");
+    lista.innerHTML = "";
+    hojas.forEach(h => {
+      const li = document.createElement("li");
+      if (cuenta[h.fecha] > 1) li.className = "repetida";
+      li.innerHTML = '<span class="fecha"></span><span class="pts num"></span><button class="borrar" type="button" aria-label="Quitar hoja">×</button>';
+      li.querySelector(".fecha").textContent = fechaBonita(h.fecha);
+      li.querySelector(".pts").textContent = pts(h.puntos);
+      li.querySelector("button").addEventListener("click", () => {
+        estado.hojas = estado.hojas.filter(x => x.id !== h.id);
+        guardar(); pintar();
+      });
+      lista.appendChild(li);
+    });
+    $("vacio").hidden = hojas.length > 0;
+
+    pintarRapido();
+  }
+
+  function pintarRapido() {
+    const n = leerNumero($("f-rapido").value);
+    $("rapido").textContent = isNaN(n) ? "—" : eur(calcular(n, estado.formula).total);
+  }
+
+  $("alta").addEventListener("submit", e => {
+    e.preventDefault();
+    const fecha = $("f-fecha").value;
+    const n = leerNumero($("f-puntos").value);
+    if (!fecha) { $("f-fecha").focus(); return; }
+    if (isNaN(n) || n < 0) { $("f-puntos").setCustomValidity("Escribe los puntos, por ejemplo 312,45"); $("f-puntos").reportValidity(); return; }
+    estado.hojas.push({ id: Date.now() + Math.random(), fecha, puntos: n });
+    guardar();
+    $("f-puntos").value = "";
+    $("f-puntos").focus();
+    pintar();
+  });
+  $("f-puntos").addEventListener("input", () => $("f-puntos").setCustomValidity(""));
+  $("f-rapido").addEventListener("input", pintarRapido);
+
+  $("b-vaciar").addEventListener("click", () => { $("confirmar").hidden = false; });
+  $("b-no").addEventListener("click", () => { $("confirmar").hidden = true; });
+  $("b-si").addEventListener("click", () => { estado.hojas = []; guardar(); $("confirmar").hidden = true; pintar(); });
+
+  [["a-base", "base"], ["a-umbral", "umbral"], ["a-tarifa", "tarifa"]].forEach(([id, k]) => {
+    const el = $(id);
+    el.value = String(estado.formula[k]).replace(".", ",");
+    el.addEventListener("input", () => {
+      const n = leerNumero(el.value);
+      if (!isNaN(n) && n >= 0) { estado.formula[k] = n; guardar(); pintar(); }
+    });
+  });
+
+  $("f-fecha").value = new Date().toISOString().slice(0, 10);
+  pintar();
+</script>
+</body>
+</html>
