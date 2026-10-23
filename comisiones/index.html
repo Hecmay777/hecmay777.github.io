@@ -103,6 +103,16 @@
   .fecha { font-size: 15px; }
   .pts { font-weight: 600; }
   .vacio { margin-top: 12px; padding: 14px; border: 1px dashed var(--borde); border-radius: 12px; font-size: 14px; color: var(--suave); }
+  .cargar { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--borde); display: grid; gap: 6px; }
+  .boton-pdf { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border-radius: 10px; border: 1px dashed var(--acento); color: var(--acento); font-size: 15px; font-weight: 600; cursor: pointer; }
+  .boton-pdf svg { width: 20px; height: 20px; }
+  .boton-pdf:hover { background: var(--campo); }
+  #f-pdf { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  #f-pdf:focus-visible + .ayuda { outline: 3px solid var(--turquesa); }
+  .informe { font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--ok-fondo); color: var(--ok); }
+  .informe.error { background: var(--aviso-fondo); color: var(--aviso); }
+  .codigo { display: block; font-size: 12px; color: var(--suave); }
+  ul.hojas li.revisar .fecha::after { content: " · revisar en el PDF"; color: var(--aviso); font-size: 13px; font-weight: 600; }
   .quincenas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
   .quincenas div { background: var(--campo); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
   .quincenas strong { display: block; font-size: 17px; }
@@ -152,6 +162,15 @@
       <label for="f-puntos">Puntos<input type="text" id="f-puntos" inputmode="decimal" placeholder="Ej. 312,45" required></label>
       <button class="principal" type="submit">Añadir</button>
     </form>
+    <div class="cargar">
+      <label class="boton-pdf" for="f-pdf">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 18v-6M9 15l3 3 3-3"/></svg>
+        Cargar hojas en PDF
+      </label>
+      <input type="file" id="f-pdf" accept="application/pdf,.pdf" multiple>
+      <p class="ayuda">El PDF se lee en este móvil; no se sube a ningún sitio.</p>
+      <p class="informe" id="informe" role="status" hidden></p>
+    </div>
     <div class="quincenas">
       <div>1.ª quincena<strong class="num" id="q1">0,00</strong></div>
       <div>2.ª quincena<strong class="num" id="q2">0,00</strong></div>
@@ -261,6 +280,8 @@
       if (cuenta[h.fecha] > 1) li.className = "repetida";
       li.innerHTML = '<span class="fecha"></span><span class="pts num"></span><button class="borrar" type="button" aria-label="Quitar hoja">×</button>';
       li.querySelector(".fecha").textContent = fechaBonita(h.fecha);
+      if (h.revisar) li.classList.add("revisar");
+      if (h.codigo) { const c = document.createElement("span"); c.className = "codigo"; c.textContent = h.codigo; li.querySelector(".fecha").appendChild(c); }
       li.querySelector(".pts").textContent = pts(h.puntos);
       li.querySelector("button").addEventListener("click", () => {
         estado.hojas = estado.hojas.filter(x => x.id !== h.id);
@@ -304,6 +325,102 @@
       const n = leerNumero(el.value);
       if (!isNaN(n) && n >= 0) { estado.formula[k] = n; guardar(); pintar(); }
     });
+  });
+
+  // ---- Lectura de hojas de descarga en PDF ----
+  const PDFJS = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/";
+  let pdfjsLib = null;
+  async function cargarPdfjs() {
+    if (!pdfjsLib) {
+      pdfjsLib = await import(PDFJS + "pdf.min.mjs");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + "pdf.worker.min.mjs";
+    }
+    return pdfjsLib;
+  }
+
+  // Agrupa los trozos de texto de cada página en líneas, de arriba abajo y de izquierda a derecha
+  async function lineasDePdf(pdf) {
+    const todas = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const tc = await page.getTextContent();
+      const items = tc.items.filter(i => i.str && i.str.trim()).map(i => ({ s: i.str, x: i.transform[4], y: i.transform[5] }));
+      items.sort((a, b) => b.y - a.y || a.x - b.x);
+      const filas = [];
+      for (const it of items) {
+        const f = filas.find(f => Math.abs(f.y - it.y) < 2.5);
+        if (f) f.items.push(it); else filas.push({ y: it.y, items: [it] });
+      }
+      filas.sort((a, b) => b.y - a.y);
+      for (const f of filas) todas.push(f.items.sort((a, b) => a.x - b.x).map(i => i.s).join(" "));
+    }
+    return todas;
+  }
+
+  // Cada carga tiene una fila de subtotal en productos (7 números) y otra en envases (8 números);
+  // el penúltimo número de esa fila es el total de Com. Rep. Las filas normales llevan 9 o 10.
+  const NUM_ES = /^-?\d{1,3}(\.\d{3})*(,\d+)?$|^-?\d+(,\d+)?$/;
+  const numEs = t => Number(t.replace(/\./g, "").replace(",", "."));
+  function leerLineas(lines) {
+    const cargas = new Map();
+    let actual = null, fechaPend = null, codigoPend = null;
+    for (const raw of lines) {
+      const l = raw.replace(/\s+/g, " ").trim();
+      if (!l) continue;
+      const mc = l.match(/N[ºo°]\s*carga:?\s*(LP\d{2}-\d+)/i);
+      if (mc) codigoPend = mc[1];
+      const mf = l.match(/Fecha carga:?\s*(\d{2})\/(\d{2})\/(\d{2,4})/i);
+      if (mf) fechaPend = (mf[3].length === 2 ? "20" + mf[3] : mf[3]) + "-" + mf[2] + "-" + mf[1];
+      if (codigoPend && fechaPend) {
+        if (!cargas.has(codigoPend)) cargas.set(codigoPend, { codigo: codigoPend, fecha: fechaPend, puntos: 0, secciones: 0 });
+        actual = cargas.get(codigoPend); codigoPend = null; fechaPend = null;
+      }
+      const toks = l.split(" ");
+      if (actual && (toks.length === 7 || toks.length === 8) && toks.every(t => NUM_ES.test(t))) {
+        actual.puntos = Math.round((actual.puntos + numEs(toks[toks.length - 2])) * 100) / 100;
+        actual.secciones++;
+      }
+    }
+    return [...cargas.values()];
+  }
+
+  function informar(texto, error) {
+    const el = $("informe");
+    el.textContent = texto;
+    el.className = "informe" + (error ? " error" : "");
+    el.hidden = false;
+  }
+
+  $("f-pdf").addEventListener("change", async e => {
+    const archivos = [...e.target.files];
+    e.target.value = "";
+    if (!archivos.length) return;
+    informar("Leyendo " + (archivos.length === 1 ? "el PDF" : archivos.length + " PDF") + "…");
+    let lib;
+    try { lib = await cargarPdfjs(); }
+    catch { informar("No se ha podido abrir el lector de PDF. Comprueba que tienes internet y vuelve a probar.", true); return; }
+    let nuevas = 0, repetidas = 0, puntosNuevos = 0, sinCargas = [], dudosas = 0;
+    for (const archivo of archivos) {
+      try {
+        const pdf = await lib.getDocument({ data: new Uint8Array(await archivo.arrayBuffer()) }).promise;
+        const cargas = leerLineas(await lineasDePdf(pdf));
+        if (!cargas.length) { sinCargas.push(archivo.name); continue; }
+        for (const c of cargas) {
+          if (estado.hojas.some(h => h.codigo === c.codigo)) { repetidas++; continue; }
+          const revisar = c.secciones !== 2;
+          if (revisar) dudosas++;
+          estado.hojas.push({ id: Date.now() + Math.random(), fecha: c.fecha, puntos: c.puntos, codigo: c.codigo, revisar });
+          nuevas++; puntosNuevos += c.puntos;
+        }
+      } catch { sinCargas.push(archivo.name); }
+    }
+    guardar(); pintar();
+    const partes = [];
+    if (nuevas) partes.push("Añadidas " + nuevas + (nuevas === 1 ? " carga" : " cargas") + " (" + pts(puntosNuevos) + " puntos).");
+    if (repetidas) partes.push(repetidas + (repetidas === 1 ? " carga ya estaba apuntada y no la he vuelto a sumar." : " cargas ya estaban apuntadas y no las he vuelto a sumar."));
+    if (dudosas) partes.push("Revisa las marcadas en naranja: no he encontrado sus dos totales en el PDF.");
+    if (sinCargas.length) partes.push("No he encontrado cargas en: " + sinCargas.join(", ") + ".");
+    informar(partes.join(" ") || "No había nada nuevo que añadir.", !nuevas || dudosas > 0);
   });
 
   $("f-fecha").value = new Date().toISOString().slice(0, 10);
