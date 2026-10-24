@@ -177,6 +177,8 @@ function defaultCfg(){
       C('casa','Cosas de casa','🏠','variable'),
       C('ropa','Ropa','👕','variable'),
       C('farmacia','Farmacia','💊','variable'),
+      C('suplementacion','Suplementación','💪','variable'),
+      C('medico','Médico / Nutricionista','🩺','variable'),
       C('vacaciones','Vacaciones','✈️','variable'),
       C('extras','Extras','✨','variable'),
       C('alquiler','Alquiler','🔑','fijo'),
@@ -234,6 +236,7 @@ function defaultCfg(){
       {id:uid(),nombre:'Gasolina',importe:null,cat:'gasolina'},
       {id:uid(),nombre:'Parking',importe:null,cat:'parking'}
     ],
+    cuentas:[{id:'bankinter',nombre:'Bankinter',tipo:'dia',saldo:null,fecha:'',ts:0},{id:'tr',nombre:'Trade Republic',tipo:'ahorro',saldo:null,fecha:'',ts:0}],
     personas:['Héctor','Irene'],
     modificado:0
   };
@@ -242,6 +245,21 @@ function defaultCfg(){
 /* ===================== estado ===================== */
 let movs=store.get('cc_movs',[]);
 let cfg=store.get('cc_cfg',null)||defaultCfg();
+/* Añade las categorías nuevas de serie a una configuración ya guardada (sin tocar lo demás) */
+function asegurarCats(c){
+  const base=defaultCfg().cats;let cambio=false;
+  base.forEach((d,i)=>{
+    if(c.cats.some(x=>x.id===d.id))return;
+    const prev=base.slice(0,i).reverse().find(p=>c.cats.some(x=>x.id===p.id));
+    const pos=prev?c.cats.findIndex(x=>x.id===prev.id)+1:c.cats.length;
+    c.cats.splice(pos,0,d);cambio=true;
+  });
+  if(!Array.isArray(c.cuentas))c.cuentas=[];
+  defaultCfg().cuentas.forEach(d=>{if(!c.cuentas.some(x=>x.id===d.id)){c.cuentas.push(d);cambio=true}});
+  if(cambio){c.modificado=(Number(c.modificado)||0)+1;store.set('cc_cfg',c)}
+  return c;
+}
+asegurarCats(cfg);
 let sync=store.get('cc_sync',{url:'',clave:'',desde:0,ultimaOk:0,error:''});
 let yo=store.get('cc_yo','Héctor');
 let vista='apuntar';
@@ -350,7 +368,7 @@ function vApuntar(){
     ?'<h3>¿En qué?</h3>'+grid('variable')+'<details'+(sel&&sel.grupo==='fijo'?' open':'')+'><summary>Recibos y gastos fijos</summary>'+grid('fijo')+'</details><details'+(sel&&sel.grupo==='neutro'?' open':'')+'><summary>Traspasos e inversión (no cuentan como gasto)</summary>'+grid('neutro')+'</details>'
     :'<h3>¿Qué ingreso?</h3>'+grid('ingreso')+'<details'+(sel&&sel.grupo==='neutro'?' open':'')+'><summary>Traspasos (no cuentan como ingreso)</summary>'+grid('neutro')+'</details>';
   const ultimos=movs.filter(m=>!m.borrado).sort((a,b)=>b.creado-a.creado).slice(0,6);
-  return '<section class="card"><div class="seg"><button class="'+(form.tipo==='gasto'?'on':'')+'" onclick="setTipo(\'gasto\')">➖ Gasto</button><button class="'+(form.tipo==='ingreso'?'on':'')+'" onclick="setTipo(\'ingreso\')">➕ Ingreso</button></div>'
+  return tarjetaSaldo(true)+'<section class="card"><div class="seg"><button class="'+(form.tipo==='gasto'?'on':'')+'" onclick="setTipo(\'gasto\')">➖ Gasto</button><button class="'+(form.tipo==='ingreso'?'on':'')+'" onclick="setTipo(\'ingreso\')">➕ Ingreso</button></div>'
    +'<div class="amount"><input id="fImp" inputmode="decimal" placeholder="0,00" autocomplete="off" value="'+esc(form.imp)+'" onkeydown="if(event.key===\'Enter\')guardar()"><span>€</span></div>'
    +atajos+cats+subs
    +'<div class="row2"><label>Fecha<input type="date" id="fFecha" value="'+esc(form.fecha||hoy())+'"></label><label>Quién<select id="fQuien">'+personasOpts(form.quien||yo)+'</select></label></div>'
@@ -425,6 +443,59 @@ function pendientesFijos(y,m,t){
     return Object.assign({},f,{sugerido:imp});
   });
 }
+/* ===================== SALDO Y LO QUE QUEDA ===================== */
+const cuentaDe=m=>m.origen==='Trade Republic'?'tr':'bankinter';
+function saldoCuenta(c){
+  if(!c||c.saldo===null||c.saldo===undefined||c.saldo==='')return null;
+  let s=Number(c.saldo)||0;
+  movs.forEach(m=>{
+    if(m.borrado||cuentaDe(m)!==c.id)return;
+    const f=String(m.fecha);
+    if(f>c.fecha||(f===c.fecha&&(Number(m.creado)||0)>(Number(c.ts)||0)))s+=m.tipo==='ingreso'?m.importe:-m.importe;
+  });
+  return r2(s);
+}
+function quedaMes(){
+  const d=new Date(),y=d.getFullYear(),m=d.getMonth();
+  const bk=cfg.cuentas.find(c=>c.tipo==='dia');
+  const saldo=saldoCuenta(bk);
+  if(saldo===null)return null;
+  const t=calc(deMes(y,m));
+  const pend=pendientesFijos(y,m,t);
+  const fijos=r2(pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0));
+  const sinImporte=pend.filter(f=>!f.sugerido&&!f.porcentaje).map(f=>catById(f.cat).nombre);
+  const queda=r2(saldo-fijos);
+  const fin=new Date(y,m+1,0).getDate(),dias=fin-d.getDate()+1;
+  const gastado=Math.max(0,t.gastos);
+  const total=gastado+Math.max(queda,0);
+  return {cuenta:bk,saldo,fijos,sinImporte,queda,dias,porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:d.getDate()/fin};
+}
+function tarjetaSaldo(compacta){
+  const q=quedaMes();
+  if(!q)return '<section class="card small"><b>💶 ¿Cuánto os queda este mes?</b><br><span class="muted">Pon el saldo de Bankinter de hoy y la app lo llevará al día.</span><button class="btn sm ghost" style="margin-top:8px;display:block" onclick="ir(\'ajustes\')">Poner saldo</button></section>';
+  const col=q.queda<0?'var(--neg)':q.consumo>q.ritmo+0.1?'var(--warn)':'var(--pos)';
+  const aviso=q.queda<0?'No llega para los recibos que quedan: habría que tirar de otra cuenta.':q.consumo>q.ritmo+0.1?'Vais gastando más deprisa de lo que avanza el mes.':'Vais bien de ritmo.';
+  const barra='<div class="bar" style="position:relative;height:10px"><i style="width:'+Math.min(100,q.consumo*100)+'%;background:'+col+'"></i><b title="Hoy" style="position:absolute;top:0;bottom:0;left:'+Math.min(100,q.ritmo*100)+'%;width:2px;background:var(--ink)"></b></div>';
+  const grande='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span>'+(q.queda<0?'Faltan':'Os quedan')+'</span><b style="font-size:26px;color:'+col+';font-variant-numeric:tabular-nums">'+eur(Math.abs(q.queda))+'</b></div>';
+  if(compacta)return '<section class="card" onclick="modoRes=\'mes\';vm={y:new Date().getFullYear(),m:new Date().getMonth()};ir(\'resumen\')" style="cursor:pointer">'+grande+barra+'<p class="small muted" style="margin:6px 0 0">'+(q.queda>0?eur(q.porDia)+' al día durante '+q.dias+' día'+(q.dias>1?'s':'')+' · ':'')+aviso+'</p></section>';
+  const tr=cfg.cuentas.find(c=>c.tipo==='ahorro'),st=saldoCuenta(tr);
+  const linea=(a,b,extra)=>'<div class="bhead" style="padding:4px 0"><span>'+a+'</span><span'+(extra||'')+'>'+b+'</span></div>';
+  return '<section class="card"><h2>💶 Lo que os queda este mes</h2>'+grande+barra
+   +'<p class="small" style="margin:6px 0 10px;color:'+col+'">'+aviso+'</p>'
+   +linea('Saldo de '+esc(q.cuenta.nombre)+' ahora',eur(q.saldo))
+   +linea('Recibos fijos que faltan por cobrar','− '+eur(q.fijos))
+   +linea('<b>Para gastar hasta fin de mes</b>','<b>'+eur(q.queda)+'</b>')
+   +(q.queda>0?linea('Al día ('+q.dias+' día'+(q.dias>1?'s':'')+')',eur(q.porDia)):'')
+   +(q.sinImporte.length?'<p class="small muted">Sin importe todavía: '+q.sinImporte.map(esc).join(', ')+'. Cuando llegue la factura, apúntala.</p>':'')
+   +(st!==null?'<p class="small muted" style="margin-top:8px">🏦 Ahorro en '+esc(tr.nombre)+': <b>'+eur(st)+'</b></p>':'')
+   +'<p class="small muted">Saldo puesto el '+fechaCorta(q.cuenta.fecha)+'. <a href="#" onclick="ir(\'ajustes\');return false">Actualizar</a></p></section>';
+}
+function ponerSaldo(id){
+  const c=cfg.cuentas.find(x=>x.id===id);const el=$('#sal_'+id);
+  if(!c||!el||!el.value.trim()){toast('Escribe el saldo');return}
+  c.saldo=r2(parseNum(el.value));c.fecha=hoy();c.ts=Date.now();
+  saveCfg();render();toast('Saldo de '+c.nombre+' guardado: '+eur(c.saldo));
+}
 function donut(items,total){
   const R=54,C=2*Math.PI*R;let off=0;
   const segs=items.map(it=>{const len=total>0?it.v/total*C:0;const s='<circle r="'+R+'" cx="70" cy="70" fill="none" stroke="'+it.col+'" stroke-width="22" stroke-dasharray="'+len+' '+(C-len)+'" stroke-dashoffset="'+(-off)+'" transform="rotate(-90 70 70)"/>';off+=len;return s}).join('');
@@ -439,6 +510,7 @@ function resumenMes(){
   const pm=vm.m===0?{y:vm.y-1,m:11}:{y:vm.y,m:vm.m-1};
   const tp=calc(deMes(pm.y,pm.m));
   let h='<div class="kpis"><div class="kpi"><small>Ingresos</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi"><small>Gastos</small><b>'+eur(t.gastos)+'</b></div><div class="kpi"><small>Ahorro</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>';
+  const hoyD=new Date();if(vm.y===hoyD.getFullYear()&&vm.m===hoyD.getMonth())h+=tarjetaSaldo(false);
   const pend=pendientesFijos(vm.y,vm.m,t);
   if(pend.length){
     h+='<section class="card"><h2>Recibos fijos sin apuntar</h2><p class="muted small" style="margin-top:-6px">Confirma el importe y pulsa ✓. Si un mes no toca, ignóralo.</p>'
@@ -561,19 +633,22 @@ function detectar(rows){
   let fecha=find(/OPERACION|CONTABLE/);if(fecha<0||!/FECHA|DATE|F\./.test(head[fecha]))fecha=find(/FECHA|DATE/);
   let concepto=find(/CONCEPTO|DESCRIPCION|DETALLE|MOVIMIENTO|COMERCIO|DESCRIPTION|NAME|BENEFICIARIO|NOMBRE/);
   const importe=find(/IMPORTE|CANTIDAD|AMOUNT/,/SALDO|BALANCE/);
-  const cargo=find(/CARGO|DEBE|ADEUDO/),abono=find(/ABONO|HABER/);
-  if(h<0){fecha=0;concepto=1;return {h:-1,fecha,concepto,importe:2,cargo:-1,abono:-1}}
+  const cargo=find(/CARGO|DEBE|ADEUDO/),abono=find(/ABONO|HABER/),saldo=find(/SALDO|BALANCE/);
+  if(h<0){fecha=0;concepto=1;return {h:-1,fecha,concepto,importe:2,cargo:-1,abono:-1,saldo:-1}}
   if(concepto<0)concepto=head.findIndex((x,i)=>i!==fecha&&i!==importe&&i!==cargo&&i!==abono);
-  return {h,fecha,concepto,importe,cargo,abono};
+  return {h,fecha,concepto,importe,cargo,abono,saldo};
 }
 function buscarDup(fecha,importe,tipo,usados){
   const t=new Date(fecha).getTime();
-  return movs.find(m=>!m.borrado&&(!m.importKey||String(m.importKey).startsWith('gmail|'))&&!usados.has(m.id)&&m.tipo===tipo&&Math.abs(m.importe-importe)<0.01&&Math.abs(new Date(m.fecha).getTime()-t)<=3*864e5);
+  const libre=m=>!m.borrado&&(!m.importKey||String(m.importKey).startsWith('gmail|'))&&!usados.has(m.id)&&m.tipo===tipo&&Math.abs(m.importe-importe)<0.01;
+  const dias=m=>Math.abs(new Date(m.fecha).getTime()-t)/864e5;
+  // Mismo importe en ±3 días, o un recibo fijo confirmado con ✓ en las 3 semanas de alrededor (el banco puede cobrarlo otro día)
+  return movs.find(m=>libre(m)&&dias(m)<=3)||movs.find(m=>libre(m)&&m.origen==='fijo'&&dias(m)<=21);
 }
 function construirFilas(){
-  const {h,fecha,concepto,importe,cargo,abono}=imp.map;
+  const {h,fecha,concepto,importe,cargo,abono}=imp.map;const colS=imp.map.saldo??-1;
   const out=[],usados=new Set(),veces={};
-  imp.raw.slice(h+1).forEach(r=>{
+  imp.raw.slice(h+1).forEach((r,n)=>{
     const f=parseFecha(r[fecha]);if(!f)return;
     let v=importe>=0?parseNum(r[importe]):(parseNum(r[abono])||0)-Math.abs(parseNum(r[cargo])||0);
     if(!v)return;
@@ -585,7 +660,7 @@ function construirFilas(){
     const ya=movs.some(m=>!m.borrado&&m.importKey===key);
     const dup=ya?null:buscarDup(f,Math.abs(r2(v)),tipo,usados);
     if(dup)usados.add(dup.id);
-    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup});
+    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,n,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
   });
   imp.filas=out.sort((a,b)=>a.fecha.localeCompare(b.fecha));
 }
@@ -598,12 +673,13 @@ function vImportar(){
   const selCol=(k,vacio)=>'<select onchange="imp.map.'+k+'=+this.value;construirFilas();render()">'+(vacio?'<option value="-1">— ninguna —</option>':'')+cols.map((c,i)=>'<option value="'+i+'"'+(imp.map[k]===i?' selected':'')+'>'+esc(c)+'</option>').join('')+'</select>';
   h+='<section class="card"><details'+(imp.filas.length?'':' open')+'><summary>Columnas del archivo '+(imp.filas.length?'(detectadas ✓)':'(revisa esto)')+'</summary>'
    +'<div class="row2"><label>Fecha'+selCol('fecha')+'</label><label>Concepto'+selCol('concepto')+'</label></div><label>Importe'+selCol('importe',true)+'</label>'
-   +(imp.map.importe<0?'<div class="row2"><label>Cargos'+selCol('cargo',true)+'</label><label>Abonos'+selCol('abono',true)+'</label></div>':'')
+   +(imp.map.importe<0?'<div class="row2"><label>Cargos'+selCol('cargo',true)+'</label><label>Abonos'+selCol('abono',true)+'</label></div>':'')+'<label>Saldo (opcional)'+selCol('saldo',true)+'</label>'
    +'<label>Fila de títulos<input type="number" min="0" value="'+(imp.map.h+1)+'" onchange="imp.map.h=(+this.value)-1;construirFilas();render()"></label></details></section>';
   if(!imp.filas.length)return h+'<section class="card muted small">No encuentro movimientos con esas columnas. Ábrelas arriba y elige cuál es la fecha, el concepto y el importe.</section>';
   const n={nuevo:0,dup:0,ya:0};imp.filas.forEach(f=>n[f.estado]++);
   const sinCat=imp.filas.filter(f=>f.ok&&!f.cat).length;
   h+='<section class="card"><h2>'+imp.filas.length+' movimientos</h2><p class="small" style="margin-top:-4px">✅ '+n.nuevo+' nuevos · <span class="badge w">'+n.dup+' posibles repetidos</span> · '+n.ya+' ya importados</p>'
+   +(saldoDelExtracto()?'<p class="small">💶 Saldo según el extracto: <b>'+eur(saldoDelExtracto().saldo)+'</b> ('+fechaCorta(saldoDelExtracto().fecha)+'). Se guardará al importar.</p>':'')
    +(sinCat?'<p class="small" style="color:var(--warn)">⚠️ '+sinCat+' sin categoría. Elige una: la app lo recordará para la próxima vez.</p>':'')
    +'<div id="ifilas">'+filasHTML()+'</div>'
    +'<button class="btn" onclick="importarSeleccion()">Importar seleccionados</button></section>';
@@ -629,14 +705,35 @@ function cambiarCatImp(i,v){
   }
   $('#ifilas').innerHTML=filasHTML();
 }
+/* Saldo de la cuenta al final del extracto (el del movimiento más reciente) */
+function saldoDelExtracto(){
+  const id={'Bankinter':'bankinter','Trade Republic':'tr'}[imp.banco];
+  const conS=imp.filas.filter(f=>f.saldo!==null&&f.saldo!==undefined);
+  if(!id||!conS.length)return null;
+  const porN=[...imp.filas].sort((a,b)=>a.n-b.n);
+  // ¿El extracto va del más reciente al más antiguo? Lo deducimos de los propios saldos y, si no se puede, de las fechas
+  const val=f=>f.tipo==='gasto'?-f.importe:f.importe,cerca=(a,b)=>Math.abs(a-b)<0.01;
+  let vD=0,vA=0;
+  for(let i=0;i+1<porN.length;i++){const a=porN[i],b=porN[i+1];if(a.saldo==null||b.saldo==null)continue;if(cerca(a.saldo,b.saldo+val(a)))vD++;if(cerca(b.saldo,a.saldo+val(b)))vA++}
+  const desc=vD!==vA?vD>vA:(porN.length>1&&porN[0].fecha>porN[porN.length-1].fecha);
+  const max=conS.reduce((a,f)=>f.fecha>a?f.fecha:a,'');
+  const delDia=conS.filter(f=>f.fecha===max).sort((a,b)=>a.n-b.n);
+  const f=desc?delDia[0]:delDia[delDia.length-1];
+  return {id,saldo:f.saldo,fecha:max};
+}
 function importarSeleccion(){
   const sel=imp.filas.filter(f=>f.ok);
-  if(!sel.length){toast('No hay nada seleccionado');return}
+  const se=saldoDelExtracto();
+  if(!sel.length&&!se){toast('No hay nada seleccionado');return}
   sel.forEach(f=>movs.push(nuevoMov({fecha:f.fecha,tipo:f.tipo,importe:f.importe,categoria:f.cat||(f.tipo==='gasto'?'extras':'otros_ing'),nota:f.concepto,quien:yo,origen:imp.banco,importKey:f.key})));
-  saveMovs();programarSync();
-  const ult=sel[sel.length-1].fecha.split('-');vm={y:+ult[0],m:+ult[1]-1};
+  let msg=sel.length+' movimientos importados';
+  if(se){
+    const c=cfg.cuentas.find(x=>x.id===se.id);
+    if(c&&(!c.fecha||se.fecha>=c.fecha)){c.saldo=se.saldo;c.fecha=se.fecha;c.ts=Date.now()+1;saveCfg();msg+=' · saldo de '+c.nombre+': '+eur(se.saldo)}
+  }
+  if(sel.length){saveMovs();programarSync();const ult=sel[sel.length-1].fecha.split('-');vm={y:+ult[0],m:+ult[1]-1};vista='movs'}else vista='resumen';
   imp={banco:imp.banco,raw:null,map:null,filas:[],nombre:''};
-  vista='movs';render();toast(sel.length+' movimientos importados');
+  render();toast(msg);
 }
 
 /* ===================== AJUSTES ===================== */
@@ -646,6 +743,8 @@ function vAjustes(){
   const grupoCats=(g,t)=>'<h3>'+t+'</h3>'+cfg.cats.filter(c=>c.grupo===g).map(c=>'<div class="crow"><input class="ico" value="'+esc(c.icono)+'" onchange="setCat(\''+c.id+'\',\'icono\',this.value)"><input value="'+esc(c.nombre)+'" onchange="setCat(\''+c.id+'\',\'nombre\',this.value)">'+(g==='variable'?'<input inputmode="decimal" placeholder="Sin límite" value="'+(c.presupuesto?String(c.presupuesto).replace('.',','):'')+'" onchange="setCat(\''+c.id+'\',\'presupuesto\',parseNum(this.value))">':'<span></span>')+'<label><input type="checkbox"'+(c.oculta?'':' checked')+' onchange="setCat(\''+c.id+'\',\'oculta\',!this.checked)">Ver</label></div>').join('');
   const mesOpts=sel=>'<option value="0">Cada mes</option>'+MESES.map((m,i)=>'<option value="'+(i+1)+'"'+(sel===i+1?' selected':'')+'>Solo '+m.toLowerCase()+'</option>').join('');
   return '<section class="card"><h2>¿Quién usa este móvil?</h2><div class="seg">'+cfg.personas.map(p=>'<button class="'+(yo===p?'on':'')+'" onclick="setYo(\''+esc(p)+'\')">'+esc(p)+'</button>').join('')+'</div><p class="muted small">Los apuntes se marcan con este nombre.</p></section>'
+  +'<section class="card"><h2>💶 Saldo de las cuentas</h2><p class="muted small" style="margin-top:-4px">Escribe el saldo que ves hoy en el banco. Desde ahí la app suma los ingresos y resta los gastos. Al importar un extracto con columna de saldo se corrige solo.</p>'
+   +cfg.cuentas.map(c=>{const s=saldoCuenta(c);return '<h3>'+esc(c.nombre)+(c.tipo==='dia'?' · día a día':' · ahorro')+'</h3>'+(s!==null?'<p class="small" style="margin:0 0 6px">Ahora: <b>'+eur(s)+'</b> <span class="muted">(puesto el '+fechaCorta(c.fecha)+')</span></p>':'<p class="small muted" style="margin:0 0 6px">Sin saldo todavía.</p>')+'<div class="row2"><input id="sal_'+c.id+'" inputmode="decimal" placeholder="Saldo de hoy"><button class="btn sm" style="margin:4px 0 0" onclick="ponerSaldo(\''+c.id+'\')">Guardar saldo</button></div>'}).join('')+'</section>'
 
   +'<section class="card"><h2>☁️ Copia en la nube (Google)</h2><p class="small muted" style="margin-top:-4px">Estado: '+(sync.url?(sync.error?'<b style="color:var(--neg)">error: '+esc(sync.error)+'</b>':'conectado · última vez '+ultima):'sin conectar · los datos solo están en este móvil')+'</p>'
    +'<label>Dirección de tu hoja (URL de la aplicación web)<input value="'+esc(sync.url)+'" placeholder="https://script.google.com/macros/s/…/exec" onchange="sync.url=this.value.trim();sync.desde=0;store.set(\'cc_sync\',sync)"></label>'
@@ -722,7 +821,7 @@ async function restaurarCopia(f){
     const d=JSON.parse(await f.text());if(!Array.isArray(d.movs))throw 0;
     let n=0;
     d.movs.forEach(r=>{const i=movs.findIndex(m=>m.id===r.id);if(i<0){movs.push({...r,pend:true});n++}else if((r.modificado||0)>(movs[i].modificado||0)){movs[i]={...r,pend:true};n++}});
-    if(d.cfg&&(d.cfg.modificado||0)>(cfg.modificado||0)){cfg=d.cfg;store.set('cc_cfg',cfg)}
+    if(d.cfg&&(d.cfg.modificado||0)>(cfg.modificado||0)){cfg=asegurarCats(d.cfg);store.set('cc_cfg',cfg)}
     saveMovs();programarSync();render();toast('Copia restaurada: '+n+' movimientos recuperados');
   }catch(e){toast('Ese archivo no es una copia válida')}
 }
@@ -761,7 +860,7 @@ async function sincronizar(manual){
       if(i<0)movs.push(Object.assign(r,{pend:false}));
       else if(!(movs[i].pend&&movs[i].modificado>r.modificado))movs[i]=Object.assign(r,{pend:false});
     });
-    if(j.cfg&&(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0)){cfg=j.cfg;store.set('cc_cfg',cfg)}
+    if(j.cfg&&(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0)){cfg=asegurarCats(j.cfg);store.set('cc_cfg',cfg)}
     sync.desde=j.ahora;sync.ultimaOk=Date.now();sync.error='';mercaCache={};
     store.set('cc_sync',sync);saveMovs();
     if(manual)toast('☁️ Todo guardado en la nube');
