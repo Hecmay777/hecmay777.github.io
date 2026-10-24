@@ -84,7 +84,8 @@
   .estado.alto { background: var(--ok-fondo); color: var(--ok); }
   h2 { font-size: 17px; font-weight: 700; }
   .ayuda { font-size: 14px; color: var(--suave); margin-top: 2px; }
-  form.alta { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-top: 12px; align-items: end; }
+  form.alta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; align-items: end; }
+  .opcional { font-size: 12px; }
   label { display: grid; gap: 4px; font-size: 13px; color: var(--suave); min-width: 0; }
   input {
     font: inherit; font-size: 16px; color: var(--texto);
@@ -122,8 +123,6 @@
   .confirmar { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--aviso-fondo); color: var(--aviso); font-size: 14px; display: grid; gap: 8px; }
   .confirmar div { display: flex; gap: 8px; flex-wrap: wrap; }
   @media (max-width: 420px) {
-    form.alta { grid-template-columns: 1fr 1fr; }
-    form.alta .principal { grid-column: 1 / -1; }
     .ajustes { grid-template-columns: 1fr; }
     .grande { font-size: 38px; }
   }
@@ -156,9 +155,10 @@
 
   <section class="panel">
     <h2>Hojas de descarga</h2>
-    <p class="ayuda">Apunta la fecha y los puntos (Com. Rep.) de cada hoja.</p>
+    <p class="ayuda">Apunta la fecha (o el periodo, del día inicial al final) y los puntos (Com. Rep.) de cada hoja.</p>
     <form class="alta" id="alta">
-      <label for="f-fecha">Fecha<input type="date" id="f-fecha" required></label>
+      <label for="f-fecha">Desde<input type="date" id="f-fecha" required></label>
+      <label for="f-hasta">Hasta <span class="opcional">(opcional)</span><input type="date" id="f-hasta"></label>
       <label for="f-puntos">Puntos<input type="text" id="f-puntos" inputmode="decimal" placeholder="Ej. 312,45" required></label>
       <button class="principal" type="submit">Añadir</button>
     </form>
@@ -228,6 +228,7 @@
 
   const eur = n => n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
   const pts = n => n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fechaCorta = iso => new Date(iso + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" });
   const fechaBonita = iso => new Date(iso + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
 
   let estado = { hojas: [], formula: { ...POR_DEFECTO } };
@@ -279,7 +280,7 @@
       const li = document.createElement("li");
       if (cuenta[h.fecha] > 1) li.className = "repetida";
       li.innerHTML = '<span class="fecha"></span><span class="pts num"></span><button class="borrar" type="button" aria-label="Quitar hoja">×</button>';
-      li.querySelector(".fecha").textContent = fechaBonita(h.fecha);
+      li.querySelector(".fecha").textContent = h.hasta ? fechaCorta(h.fecha) + " – " + fechaCorta(h.hasta) : fechaBonita(h.fecha);
       if (h.revisar) li.classList.add("revisar");
       if (h.codigo) { const c = document.createElement("span"); c.className = "codigo"; c.textContent = h.codigo; li.querySelector(".fecha").appendChild(c); }
       li.querySelector(".pts").textContent = pts(h.puntos);
@@ -302,16 +303,21 @@
   $("alta").addEventListener("submit", e => {
     e.preventDefault();
     const fecha = $("f-fecha").value;
+    const hasta = $("f-hasta").value;
     const n = leerNumero($("f-puntos").value);
     if (!fecha) { $("f-fecha").focus(); return; }
+    if (hasta && hasta < fecha) { $("f-hasta").setCustomValidity("La fecha final no puede ser anterior a la inicial"); $("f-hasta").reportValidity(); return; }
     if (isNaN(n) || n < 0) { $("f-puntos").setCustomValidity("Escribe los puntos, por ejemplo 312,45"); $("f-puntos").reportValidity(); return; }
-    estado.hojas.push({ id: Date.now() + Math.random(), fecha, puntos: n });
+    const hoja = { id: Date.now() + Math.random(), fecha, puntos: n };
+    if (hasta && hasta !== fecha) hoja.hasta = hasta;
+    estado.hojas.push(hoja);
     guardar();
     $("f-puntos").value = "";
     $("f-puntos").focus();
     pintar();
   });
   $("f-puntos").addEventListener("input", () => $("f-puntos").setCustomValidity(""));
+  ["f-fecha", "f-hasta"].forEach(id => $(id).addEventListener("input", () => $("f-hasta").setCustomValidity("")));
   $("f-rapido").addEventListener("input", pintarRapido);
 
   $("b-vaciar").addEventListener("click", () => { $("confirmar").hidden = false; });
