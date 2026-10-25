@@ -1,0 +1,1436 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mi Nómina al Céntimo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+body{margin:0}
+/* Hoja de ruta: una columna de trabajo, cabecera tipo albarán con pestañas; cifras en mono tabular */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --ink:#14202e; --muted:#5b6876; --line:#d5dbe2;
+  --accent:#f2b51d; --accent-ink:#1d1606; --navy:#1b2f47;
+  --ok:#1f7a4d; --ok-bg:#e3f2ea; --bad:#b3261e; --bad-bg:#fbe7e5; --warn:#8a5a00; --warn-bg:#fdf1d8; --info:#36597e; --info-bg:#e6eef7;
+  --f-display:"Archivo","Arial Narrow",system-ui,sans-serif; --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif; --f-num:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151c; --surface:#18212b; --ink:#e7ecf1; --muted:#9aa7b4; --line:#2b3744; --accent:#f2b51d; --accent-ink:#1d1606; --navy:#0b1118;
+  --ok:#6fd3a0; --ok-bg:#15301f; --bad:#ff8a80; --bad-bg:#3a1714; --warn:#f4c46a; --warn-bg:#352708; --info:#9cc0e8; --info-bg:#172839; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151c; --surface:#18212b; --ink:#e7ecf1; --muted:#9aa7b4; --line:#2b3744; --accent:#f2b51d; --accent-ink:#1d1606; --navy:#0b1118;
+  --ok:#6fd3a0; --ok-bg:#15301f; --bad:#ff8a80; --bad-bg:#3a1714; --warn:#f4c46a; --warn-bg:#352708; --info:#9cc0e8; --info-bg:#172839; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--navy)}
+header{background:var(--navy);color:#fff;position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-block:14px 8px}
+h1{font-family:var(--f-display);font-stretch:80%;font-weight:800;font-size:1.45rem;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1 span{color:var(--accent)}
+.sub{font-size:.8rem;color:#b9c6d4;text-transform:uppercase;letter-spacing:.08em}
+nav{display:flex;gap:4px}
+nav button{flex:1;font:600 .95rem var(--f-display);font-stretch:85%;letter-spacing:.03em;text-transform:uppercase;background:none;border:0;color:#b9c6d4;padding:10px 4px 12px;border-bottom:3px solid transparent;cursor:pointer}
+nav button[aria-selected="true"]{color:#fff;border-bottom-color:var(--accent)}
+main{padding-block:18px 48px}
+section{display:grid;gap:16px}
+h2{font-family:var(--f-display);font-stretch:85%;font-size:1.15rem;margin:0;font-weight:700}
+h3{font-family:var(--f-display);font-stretch:85%;font-size:1rem;margin:0;font-weight:700}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:12px;min-width:0}
+.muted{color:var(--muted);font-size:.9rem}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+label{font-size:.85rem;color:var(--muted);display:grid;gap:4px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0;width:100%}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.btn{font:700 .95rem var(--f-display);font-stretch:90%;letter-spacing:.02em;border-radius:8px;padding:11px 16px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.small{padding:6px 10px;font-size:.85rem}
+.btn.danger{color:var(--bad)}
+.monthbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.monthbar strong{font-family:var(--f-display);font-stretch:85%;font-size:1.3rem;text-transform:capitalize}
+.tipos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tipo{display:grid;gap:2px;justify-items:center;padding:12px 6px;border:1px solid var(--line);border-radius:10px;background:var(--bg);cursor:pointer;font:inherit;color:var(--ink)}
+.tipo b{font-family:var(--f-display);font-stretch:85%;font-size:1rem}
+.tipo span{font-family:var(--f-num);font-size:.8rem;color:var(--muted)}
+.tipo[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 2px var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:460px){.grid3{grid-template-columns:1fr 1fr}}
+.totales{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.totales div{padding:10px;display:grid;gap:2px;border-right:1px solid var(--line)}
+.totales div:last-child{border-right:0;background:var(--bg)}
+.totales small{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.totales b{font-family:var(--f-num);font-size:1.05rem}
+@media (max-width:460px){.totales{grid-template-columns:repeat(2,1fr)}.totales div:nth-child(2){border-right:0}.totales div:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+ul.lista{list-style:none;margin:0;padding:0;display:grid}
+ul.lista li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+ul.lista li:first-child{border-top:0}
+.chip{font:600 .72rem var(--f-display);text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:99px;background:var(--bg);border:1px solid var(--line);white-space:nowrap}
+.chip.sabado{background:var(--info-bg);color:var(--info);border-color:transparent}
+.chip.festivo{background:var(--bad-bg);color:var(--bad);border-color:transparent}
+.chip.viaje{background:var(--warn-bg);color:var(--warn);border-color:transparent}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:22px 16px;text-align:center;display:grid;gap:8px;justify-items:center;background:var(--surface);cursor:pointer}
+.drop.over{border-color:var(--accent)}
+.veredicto{border-radius:10px;padding:16px;display:grid;gap:4px}
+.veredicto.ok{background:var(--ok-bg);color:var(--ok)}
+.veredicto.mal{background:var(--bad-bg);color:var(--bad)}
+.veredicto.aviso{background:var(--warn-bg);color:var(--warn)}
+.veredicto strong{font-family:var(--f-display);font-stretch:85%;font-size:1.35rem}
+.veredicto span{color:var(--ink);font-size:.92rem}
+.checks{display:grid;gap:0}
+.check{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.check:first-child{border-top:0}
+.check .ic{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font:700 .8rem var(--f-num)}
+.ic.ok{background:var(--ok-bg);color:var(--ok)} .ic.mal{background:var(--bad-bg);color:var(--bad)} .ic.aviso{background:var(--warn-bg);color:var(--warn)} .ic.info{background:var(--info-bg);color:var(--info)}
+.check b{font-weight:600}
+.check p{margin:2px 0 0;color:var(--muted);font-size:.9rem;font-variant-numeric:tabular-nums}
+.saved{display:flex;gap:8px;flex-wrap:wrap}
+.saved button{font:600 .85rem var(--f-body);padding:6px 10px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.saved button[aria-current="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+textarea{font:400 .75rem var(--f-num);width:100%;min-height:90px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:8px}
+.aviso-box{background:var(--warn-bg);color:var(--ink);border-radius:8px;padding:12px;display:grid;gap:10px}
+ul.hist{list-style:none;margin:0;padding:0;font-size:.85rem;color:var(--muted);display:grid;gap:4px}
+.oculto{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.check>div{min-width:0}
+.check p,.check b,ul.lista li span,ul.hist li{overflow-wrap:anywhere}
+.btn.small{min-height:40px}
+.rescate{border-color:var(--bad);background:var(--bad-bg)}
+ul.hist li{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;z-index:20}
+.empty{color:var(--muted);font-size:.92rem;padding:6px 0}
+.cobro{font-size:.88rem;color:var(--muted)}
+.cobro b{color:var(--ink)}
+@media (prefers-reduced-motion:no-preference){.check{animation:in .25s ease both}@keyframes in{from{opacity:.4;transform:translateY(3px)}to{opacity:1;transform:none}}}
+</style>
+
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top"><h1>Mi nómina <span>al céntimo</span></h1><div class="sub">Voldistribución</div></div>
+    <nav role="tablist">
+      <button role="tab" id="t-extras" aria-selected="true" aria-controls="v-extras" data-tab="extras">Extras</button>
+      <button role="tab" id="t-nomina" aria-selected="false" aria-controls="v-nomina" data-tab="nomina">Nómina</button>
+      <button role="tab" id="t-ajustes" aria-selected="false" aria-controls="v-ajustes" data-tab="ajustes">Ajustes</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- EXTRAS -->
+  <div class="panel rescate" id="rescate" hidden role="alert"></div>
+  <section id="v-extras" role="tabpanel" aria-labelledby="t-extras">
+    <div class="panel">
+      <div class="monthbar">
+        <button class="btn small" id="mPrev" aria-label="Mes anterior">‹</button>
+        <strong id="mLabel">—</strong>
+        <button class="btn small" id="mNext" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="totales" id="mTot"></div>
+      <div class="cobro" id="mCobro"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Apuntar un extra</h2>
+      <div class="tipos" id="tipos"></div>
+      <div class="grid2">
+        <label>Fecha<input type="date" id="exFecha"></label>
+        <label>Nota (opcional)<input type="text" id="exNota" placeholder="Ej.: viaje a Manacor"></label>
+      </div>
+      <button class="btn primary" id="exAdd">Apuntar</button>
+      <div class="aviso-box" id="exWarn" hidden><span id="exWarnTxt"></span><div class="row"><button class="btn small" id="exWarnYes">Apuntar igualmente</button><button class="btn small" id="exWarnNo">Cancelar</button></div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Extras del mes</h2>
+      <ul class="lista" id="exList"></ul>
+    </div>
+
+    <div class="panel">
+      <h2>Comisión del mes</h2>
+      <p class="muted" style="margin:0">Pon los puntos que te da la calculadora de comisiones, o directamente los euros.</p>
+      <div class="grid3">
+        <label>Puntos<input type="text" inputmode="decimal" id="coPuntos" placeholder="8.077,24"></label>
+        <label>o euros<input type="text" inputmode="decimal" id="coEuros"></label>
+        <label>Extra de verano €<input type="text" inputmode="decimal" id="coExtra"></label>
+      </div>
+      <div class="num" id="coRes"></div>
+      <div class="row"><button class="btn" id="coSave">Guardar comisión</button><button class="btn small danger" id="coDel">Borrar comisión</button></div>
+    </div>
+  </section>
+
+  <!-- NÓMINA -->
+  <section id="v-nomina" role="tabpanel" aria-labelledby="t-nomina" hidden>
+    <div class="drop" id="drop">
+      <h2>Subir nómina en PDF</h2>
+      <span class="muted">La que descargas del portal. Puedes subir varias a la vez, también el recibo de la paga extra.</span>
+      <button type="button" class="btn primary" id="pdfBtn">Elegir PDF</button>
+      <input type="file" id="pdfIn" class="oculto" accept="application/pdf" multiple tabindex="-1" aria-hidden="true">
+    </div>
+    <div class="panel" id="savedPanel" hidden>
+      <h3>Nóminas guardadas</h3>
+      <div class="saved" id="saved"></div>
+    </div>
+    <div class="panel" id="errLect" hidden></div>
+    <div id="resultado" aria-live="polite"></div>
+  </section>
+
+  <!-- AJUSTES -->
+  <section id="v-ajustes" role="tabpanel" aria-labelledby="t-ajustes" hidden>
+    <div class="panel">
+      <h2>Mi sueldo fijo mensual</h2>
+      <p class="muted" style="margin:0">Se rellena solo con las nóminas que subes. Cada cambio se guarda con el mes desde el que vale, así las nóminas antiguas se comprueban con el sueldo de entonces.</p>
+      <div class="grid2" id="fijos"></div>
+      <label>Válido desde<input type="month" id="fxDesde"></label>
+      <button class="btn" id="fijosSave">Guardar sueldo fijo</button>
+      <ul class="hist" id="fxHist"></ul>
+    </div>
+    <div class="panel">
+      <h2>Precios de los extras</h2>
+      <div class="grid3">
+        <label>Sábado €<input type="text" inputmode="decimal" id="pSab"></label>
+        <label>Festivo €<input type="text" inputmode="decimal" id="pFes"></label>
+        <label>Viaje extra €<input type="text" inputmode="decimal" id="pVia"></label>
+      </div>
+      <h3>Comisión</h3>
+      <div class="grid2">
+        <label>Mínimo €<input type="text" inputmode="decimal" id="cMin"></label>
+        <label>Hasta (puntos)<input type="text" inputmode="decimal" id="cUmb"></label>
+        <label>Por encima: base €<input type="text" inputmode="decimal" id="cBase"></label>
+        <label>€ por punto<input type="text" inputmode="decimal" id="cPP"></label>
+      </div>
+      <p class="muted" style="margin:0">Hasta el límite de puntos cobras el mínimo. Por encima: base + € por punto que pasa del límite.</p>
+      <label>Válido desde<input type="month" id="pDesde"></label>
+      <button class="btn" id="preciosSave">Guardar precios</button>
+      <ul class="hist" id="pHist"></ul>
+    </div>
+    <div class="panel">
+      <h2>Subida de convenio prevista</h2>
+      <p class="muted" style="margin:0">Convenio de comercio de Baleares. Cuando tu sueldo suba, la calculadora comprueba que sea este porcentaje.</p>
+      <div class="grid2" id="subidas"></div>
+      <button class="btn" id="subSave">Guardar subidas</button>
+    </div>
+    <div class="panel">
+      <h2>Copia de seguridad</h2>
+      <p class="muted" style="margin:0">Todo se guarda solo en este móvil. Haz una copia de vez en cuando y guárdala en WhatsApp, Drive o donde quieras. <span id="lastBk"></span></p>
+      <p class="muted" style="margin:0"><b>En iPhone:</b> añade esta página a la pantalla de inicio (Compartir → Añadir a pantalla de inicio). Si no, Safari puede borrar los datos tras 7 días sin abrirla.</p>
+      <div class="row">
+        <button class="btn primary" id="bkCopy">Copiar copia de seguridad</button>
+        <button class="btn" id="bkFile" hidden>Descargar archivo</button>
+      </div>
+      <textarea id="bkText" readonly hidden></textarea>
+      <h3>Restaurar</h3>
+      <div class="row">
+        <button type="button" class="btn" id="rsFileBtn">Abrir archivo de copia</button>
+        <input type="file" id="rsFile" class="oculto" accept=".json,application/json,text/plain" tabindex="-1" aria-hidden="true">
+      </div>
+      <label for="rsText">…o pega aquí el texto de la copia</label>
+      <textarea id="rsText"></textarea>
+      <button class="btn" id="rsBtn">Restaurar desde el texto</button>
+      <div class="aviso-box" id="rsConf" hidden><span id="rsConfTxt"></span><div class="row"><button class="btn small danger" id="rsYes">Sí, sustituir</button><button class="btn small" id="rsNo">Cancelar</button></div></div>
+      <div class="row" id="rsUndoRow" hidden><span class="muted" id="rsUndoTxt"></span><button class="btn small" id="rsUndo">Deshacer la restauración</button></div>
+    </div>
+    <div class="panel">
+      <h3>Cómo comprueba la nómina</h3>
+      <p class="muted" style="margin:0">Suma de conceptos y líquido; parte proporcional de pagas extra (salario base + antigüedad + complemento chófer × 2 ÷ 12); base de cotización; Seguridad Social (4,70 % + MEI del año + 1,55 % + 0,10 %, contrato indefinido, con el tope máximo de cotización); IRPF sobre el total; bajas por accidente al 75 %; atrasos; y los extras y la comisión del mes anterior, porque se cobran a mes vencido.</p>
+      <button class="btn danger small" id="wipe">Borrar todos mis datos</button>
+      <div class="row" id="wipeConf" hidden><span>¿Seguro? Se borra todo de este móvil.</span><button class="btn danger small" id="wipeYes">Sí, borrar</button><button class="btn small" id="wipeNo">Cancelar</button></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script>
+// ===== Núcleo de cálculo (sin interfaz). Todo el dinero en céntimos enteros. =====
+const NC = (() => {
+  const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+  // "1.202,30" -> 120230 ; "4,85 %" -> 485 ; "12,34-" y "(12,34)" -> -1234
+  function cents(s) {
+    if (s == null) return null;
+    let t = String(s).replace('%', '').trim();
+    let neg = false;
+    if (/^\(.*\)$/.test(t)) { neg = true; t = t.slice(1, -1).trim(); }
+    if (/-$/.test(t)) { neg = true; t = t.slice(0, -1).trim(); }
+    if (/^-/.test(t)) { neg = !neg; t = t.slice(1).trim(); }
+    t = t.replace(/\./g, '').replace(',', '.');
+    if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
+    const [e, d = ''] = t.split('.');
+    const v = parseInt(e, 10) * 100 + parseInt((d + '00').slice(0, 2), 10);
+    return neg ? -v : v;
+  }
+  // Número escrito por una persona: "8.077,24", "8077,24", "8077.24", "8.077" -> 8077.24 / 8077. null si no es válido.
+  function leerNumero(s) {
+    if (s == null) return null;
+    let t = String(s).trim().replace(/\s/g, '').replace(/€/g, '');
+    if (!t) return null;
+    const hasC = t.includes(','), hasD = t.includes('.');
+    if (hasC && hasD) {
+      if (t.lastIndexOf(',') > t.lastIndexOf('.')) t = t.replace(/\./g, '').replace(',', '.');
+      else t = t.replace(/,/g, '');
+    } else if (hasC) {
+      if ((t.match(/,/g) || []).length > 1) return null;
+      t = t.replace(',', '.');
+    } else if (hasD) {
+      const parts = t.split('.');
+      if (parts.length > 2) { if (parts.slice(1).every(p => p.length === 3)) t = parts.join(''); else return null; }
+      else if (parts[1].length === 3 && !/^0+$/.test(parts[0])) t = parts.join(''); // "8.077" = ocho mil setenta y siete; "0.192" es decimal
+    }
+    if (!/^\d+(\.\d+)?$/.test(t)) return null;
+    return parseFloat(t);
+  }
+  // redondeo "mitad hacia arriba" de a*b/den con enteros
+  function mulDiv(a, b, den) {
+    const n = a * b;
+    const s = n < 0 ? -1 : 1;
+    return s * Math.floor((Math.abs(n) * 2 + den) / (2 * den));
+  }
+  const pct = (c, p) => mulDiv(c, p, 10000); // c céntimos × p centésimas de %
+  const pc = (p) => (p / 100).toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' %';
+  function eur(c) {
+    if (c == null || !Number.isFinite(c)) return '—';
+    c = Math.round(c);
+    const s = c < 0 ? '-' : '';
+    const a = Math.abs(c);
+    const e = Math.floor(a / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return s + e + ',' + String(a % 100).padStart(2, '0') + ' €';
+  }
+  const dif = (esp, real) => esp > real ? `Te faltan ${eur(esp - real)}.` : `Te pagan ${eur(real - esp)} de más.`;
+  const mesLabel = (k) => { const [y, m] = k.split('-').map(Number); return MESES[m - 1] + ' ' + y; };
+  const mesPrev = (k) => { let [y, m] = k.split('-').map(Number); m--; if (!m) { m = 12; y--; } return y + '-' + String(m).padStart(2, '0'); };
+  const mesSig = (k) => { let [y, m] = k.split('-').map(Number); m++; if (m > 12) { m = 1; y++; } return y + '-' + String(m).padStart(2, '0'); };
+  const plural = (n, s, p) => n === 1 ? s : p;
+
+  // ---------- Lectura del PDF (items de pdf.js: {str, x, y, w}; páginas siguientes con y desplazada) ----------
+  function parse(items) {
+    const its = items.filter(i => i.str && i.str.trim());
+    const all = its.map(i => i.str).join(' ');
+    const esExtra = /Recibo de Paga extra/i.test(all);
+    const per = all.match(/PERIODO:\s*(\d{2})\.(\d{2})\.(\d{4})\s*a\s*(\d{2})\.(\d{2})\.(\d{4})/);
+    if (!per) throw new Error('no encuentro el periodo; ¿es una nómina de Voldistribución?');
+    const mes = per[3] + '-' + per[2];
+
+    const rows = [];
+    for (const it of its.slice().sort((a, b) => b.y - a.y || a.x - b.x)) {
+      let r = rows.find(r => Math.abs(r.y - it.y) < 2);
+      if (!r) { r = { y: it.y, items: [] }; rows.push(r); }
+      r.items.push(it);
+    }
+    rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
+
+    const lineas = [];
+    for (const r of rows) {
+      const codeIt = r.items.find(i => i.x > 110 && i.x < 135 && /^[\/A-Z0-9]{4}$/.test(i.str.trim()));
+      if (!codeIt) continue;
+      const esR = r.items.some(i => i.x < 100 && i.str.trim() === 'R');
+      let concepto = '', prevEnd = null;
+      const nums = [];
+      for (const i of r.items) {
+        if (i === codeIt || i.x < 100) continue;
+        if (i.x >= 150 && i.x < 325) {
+          concepto += (prevEnd != null && i.x - prevEnd > 1.5 ? ' ' : '') + i.str; prevEnd = i.x + (i.w || 0);
+        } else if (i.x >= 325) {
+          const v = cents(i.str);
+          if (v != null) nums.push({ x: i.x, v });
+        }
+      }
+      const L = { r: esR, cod: codeIt.str.trim(), concepto: concepto.replace(/\s+/g, ' ').trim(), a: null, b: null, dev: null, ded: null };
+      for (const n of nums) {
+        if (n.x < 370) L.a = n.v;            // precio  o  base de cálculo
+        else if (n.x < 420) L.b = n.v;       // cantidad o  porcentaje
+        else if (n.x < 490) L.dev = n.v;     // devengo
+        else L.ded = n.v;                    // deducción
+      }
+      if (L.a == null && L.b == null && L.dev == null && L.ded == null) continue; // cabecera
+      lineas.push(L);
+    }
+    if (!lineas.length) throw new Error('no he podido leer las líneas');
+
+    function bajo(label) {
+      const l = its.find(i => i.str.replace(/\s+/g, ' ').trim() === label);
+      if (!l) return null;
+      const c = its.filter(i => l.y - i.y > 8 && l.y - i.y < 28 && Math.abs(i.x - l.x) < 30 && cents(i.str) != null)
+        .sort((a, b) => Math.abs(a.x - l.x) - Math.abs(b.x - l.x));
+      return c.length ? cents(c[0].str) : null;
+    }
+    const liqLab = its.find(i => /QUIDO A PERCIBIR/.test(i.str));
+    let liq = null;
+    if (liqLab) {
+      const c = its.filter(i => Math.abs(i.y - liqLab.y) < 2 && i.x > liqLab.x && cents(i.str) != null);
+      if (c.length) liq = cents(c[0].str);
+    }
+    const tot = { pp: bajo('P.P.EXTRA'), baseCC: bajo('BASE C.C.'), baseIRPF: bajo('BASE IMP.'), dev: bajo('TOT. DEVENG.'), ded: bajo('TOT. DEDUCC.'), liq };
+    const irpfL = lineas.find(l => l.cod === '/401' || l.cod === '4910');
+    return {
+      id: (esExtra ? 'extra-' : 'mes-') + mes, tipo: esExtra ? 'extra' : 'mensual', mes,
+      desde: per[1] + '/' + per[2] + '/' + per[3], hasta: per[4] + '/' + per[5] + '/' + per[6],
+      lineas, tot, irpfPct: irpfL ? irpfL.b : null
+    };
+  }
+
+  // ---------- Reglas observadas en las nóminas de Voldistribución ----------
+  const FIJOS = [
+    { cod: '0001', nombre: 'Salario base', extra: true },
+    { cod: '0013', nombre: 'Antigüedad', extra: true },
+    { cod: '0037', nombre: 'Plus personal no absorbible' },
+    { cod: '0039', nombre: 'Plus transporte' },
+    { cod: '0053', nombre: 'Complemento personal extraordinario' },
+    { cod: '0054', nombre: 'Complemento chófer', extra: true }
+  ];
+  const CONOCIDOS = {
+    '2545': 'Comisiones', '2524': 'Gratificación voluntaria', '2557': 'Ajuste por regularización',
+    '2558': 'Atrasos abonos varios', '4920': 'Diferencia paga extra', 'PA20': 'Prestación accidente de trabajo',
+    '/350': 'Contingencias comunes', '/370': 'Desempleo', '/380': 'Formación profesional', '/401': 'IRPF',
+    '4001': 'Paga extra de junio', '4910': 'IRPF paga extra'
+  };
+  const NO_COMPROBABLES = ['2557', '2558'];
+  // Subidas del convenio de comercio de Baleares (mayo 2026): 4,5 % 2026; 3,5 % 2027; 3 % 2028 y 2029
+  const SUBIDAS_CONVENIO = { 2026: 450, 2027: 350, 2028: 300, 2029: 300 };
+  const pctCambio = (nuevo, viejo) => viejo ? Math.round((nuevo - viejo) * 10000 / viejo) : null; // centésimas de %
+  const pcs = (p) => (p >= 0 ? '+' : '') + pc(p);
+  // ¿Solo ha subido la antigüedad? (un trienio, no una subida de convenio)
+  function soloAntiguedad(nuevo, antes) {
+    const cods = Object.keys(nuevo).filter(c => antes[c] != null);
+    return (nuevo['0013'] || 0) > (antes['0013'] || 0) && cods.every(c => c === '0013' || nuevo[c] === antes[c]);
+  }
+  // ¿Hubo ya una subida de convenio guardada ese año antes de este mes?
+  function subidaPreviaAnio(fh, anio, antesDe) {
+    const o = (fh || []).slice().sort((a, b) => a.desde.localeCompare(b.desde));
+    return o.find((e, i) => i > 0 && e.desde.slice(0, 4) === anio && e.desde < antesDe && !soloAntiguedad(e.valores, o[i - 1].valores) && ['0001', '0013', '0039', '0054'].some(c => (e.valores[c] || 0) > (o[i - 1].valores[c] || 0))) || null;
+  }
+  // Sueldo de referencia del año: el anterior a la primera subida guardada ese año (sin contar trienios).
+  // Devuelve {ref, subida, confirmada} o null si ese año aún no hay subida guardada.
+  function subidaDelAnio(fh, anio, hasta) {
+    const o = (fh || []).filter(e => e.desde <= hasta).sort((a, b) => a.desde.localeCompare(b.desde));
+    const i = o.findIndex((e, k) => k > 0 && e.desde.slice(0, 4) === anio && !soloAntiguedad(e.valores, o[k - 1].valores) && ['0001', '0039', '0054'].some(c => (e.valores[c] || 0) > (o[k - 1].valores[c] || 0)));
+    if (i < 0) return null;
+    return { ref: o[i - 1], subida: o[i], confirmada: o.some(e => e.desde.slice(0, 4) === anio && e.confirmada) };
+  }
+  // Conceptos que suben con el convenio (en junio 2026 subieron los cuatro un 4,5 %)
+  const CONVENIO = ['0001', '0013', '0039', '0054'];
+  // Desvíos respecto a la subida prevista. Tolerancia: 0,05 puntos o 3 céntimos (redondeos de importes pequeños).
+  function desviosSubida(nuevo, antes, prevista, excluir) {
+    const out = [];
+    for (const c of CONVENIO) {
+      if (excluir && excluir.includes(c)) continue;
+      if (nuevo[c] == null || antes[c] == null || !antes[c]) continue;
+      const esp = mulDiv(antes[c], 10000 + prevista, 10000);
+      const p = pctCambio(nuevo[c], antes[c]);
+      if (Math.abs(nuevo[c] - esp) > 3 && Math.abs(p - prevista) > 5) out.push(`${FIJOS.find(f => f.cod === c).nombre.toLowerCase()} ${pcs(p)}`);
+    }
+    return out;
+  }
+
+  // Seguridad Social del trabajador, contrato indefinido. Contingencias comunes = 4,70 % + MEI, redondeados por separado.
+  // MEI trabajador: 2026 0,15 %; 2027 0,17 %; 2028 0,18 % (ley, pendiente de confirmar); 2029 en adelante 0,20 %.
+  // Base máxima mensual: solo 2026 confirmada (5.101,20 €).
+  const SS_ANIO = {
+    2026: { mei: 15, max: 510120 },
+    2027: { mei: 17 },
+    2028: { mei: 18, pendiente: true },
+    2029: { mei: 20 }
+  };
+  function ssDe(mes) {
+    const y = +mes.slice(0, 4);
+    const k = Object.keys(SS_ANIO).map(Number).filter(a => a <= y).sort((a, b) => b - a)[0];
+    if (k == null) return null;
+    const t = SS_ANIO[k];
+    return { anio: k, exacto: k === y, max: k === y ? t.max : undefined, pendiente: t.pendiente, tipos: { '/350': [470, t.mei], '/370': [155], '/380': [10] } };
+  }
+  const ssLinea = (tipos, cod, base) => tipos[cod].reduce((s, p) => s + pct(base, p), 0);
+  const sumTipos = (tipos, cod) => tipos[cod].reduce((a, b) => a + b, 0);
+
+  // Valores con fecha: [{desde:'AAAA-MM', ...}] -> el vigente en ese mes
+  function vigente(hist, mes) {
+    return (hist || []).filter(h => h.desde <= mes).sort((a, b) => b.desde.localeCompare(a.desde))[0] || null;
+  }
+
+  // Comisión: hasta el umbral se cobra el mínimo (408,24 € desde abril 2026).
+  // Por encima: base (408 €) + porPunto (milésimas de €) por cada punto que pasa del umbral, nunca menos que el mínimo.
+  const COMISION_DEF = { minimo: 40824, base: 40800, umbral: 6300, porPunto: 192 };
+  function comisionDe(puntos, cfg) {
+    const c = cfg || COMISION_DEF;
+    const base = c.base != null ? c.base : c.minimo;
+    const p = Math.round(puntos * 100); // centésimas de punto
+    if (p <= c.umbral * 100) return c.minimo;
+    return Math.max(c.minimo, base + mulDiv(p - c.umbral * 100, c.porPunto, 1000));
+  }
+
+  const esBaja = (n) => n.lineas.some(l => !l.r && /^PA/.test(l.cod));
+  // Nómina complementaria: mensual sin ninguna línea de sueldo fijo ni baja (por ejemplo, solo un ajuste)
+  const esComplementaria = (n) => n.tipo === 'mensual' && !n.lineas.some(l => !l.r && (FIJOS.some(f => f.cod === l.cod) || /^PA/.test(l.cod)));
+  // La nómina "principal" de un mes (no complementaria), aunque se guardara como segunda
+  function nominaDelMes(hist, mes) {
+    const c = Object.values(hist || {}).filter(h => h.tipo === 'mensual' && h.mes === mes);
+    return c.find(h => !esComplementaria(h)) || null;
+  }
+  // Extras de un mes contados: un sábado que también está como festivo cuenta solo como festivo
+  function contarExtras(extras, mes) {
+    const ex = (extras || []).filter(e => e.fecha.slice(0, 7) === mes);
+    const fest = new Set(ex.filter(e => e.tipo === 'festivo').map(e => e.fecha));
+    const c = { sabado: 0, festivo: 0, viaje: 0 }, dup = [], noSab = [], dobles = [], vistos = {};
+    for (const e of ex) {
+      const k = e.fecha + e.tipo;
+      if (vistos[k]) { dup.push(e); if (e.tipo !== 'viaje') continue; } // dos viajes el mismo día pueden ser reales
+      vistos[k] = 1;
+      if (e.tipo === 'sabado' && fest.has(e.fecha)) { dobles.push(e); continue; }
+      if (e.tipo === 'sabado' && new Date(e.fecha + 'T12:00:00').getDay() !== 6) noSab.push(e);
+      if (c[e.tipo] != null) c[e.tipo]++;
+    }
+    return { c, ex, dup, noSab, dobles };
+  }
+  function fijosDe(n) {
+    const o = {};
+    for (const f of FIJOS) { const l = n.lineas.find(l => !l.r && l.cod === f.cod); if (l) o[f.cod] = l.dev; }
+    return o;
+  }
+  // Historial de sueldo a partir de nóminas completas: primera + cada subida (nunca bajadas)
+  function historialFijos(noms) {
+    const comp = noms.filter(n => n.tipo === 'mensual' && !esBaja(n) && !esComplementaria(n)).sort((a, b) => a.mes.localeCompare(b.mes));
+    const out = [];
+    for (const n of comp) {
+      const v = fijosDe(n);
+      const prev = out[out.length - 1];
+      if (!prev) { out.push({ desde: n.mes, valores: v, origen: n.id }); continue; }
+      const cods = Object.keys(v);
+      const sube = cods.some(c => v[c] > (prev.valores[c] || 0));
+      const baja = cods.some(c => v[c] < (prev.valores[c] || 0));
+      if (sube && !baja) out.push({ desde: n.mes, valores: v, origen: n.id });
+    }
+    return out;
+  }
+
+  // ---------- Comprobación ----------
+  // Estados: ok · mal (error seguro) · duda (diferencia que no puedo confirmar) · nuevo (concepto desconocido)
+  //          · aviso (falta un dato para comprobar) · info · lectura (PDF mal leído)
+  // ctx: { perfil:{fijosHist, preciosHist, comisionHist}, historial:{id:nomina}, extras:[{fecha,tipo}], comisiones:{mes:{puntos,euros,extra}} }
+  const TOPE_CONOCIDO = Math.max(...Object.values(SS_ANIO).map(t => t.max || 0));
+  const diasDelMes = (mes) => { const [y, m] = mes.split('-').map(Number); return new Date(y, m, 0).getDate(); };
+  const fechaCorta = (f) => f.split('-').reverse().slice(0, 2).join('/');
+
+  function comprobar(n, ctx) {
+    const res = [];
+    const add = (estado, titulo, detalle = '', clave) => res.push({ estado, titulo, detalle, clave });
+    const hist = ctx.historial || {};
+    const sumDev = n.lineas.reduce((s, l) => s + (l.dev || 0), 0);
+    const sumDed = n.lineas.reduce((s, l) => s + (l.ded || 0), 0);
+    const t = n.tot;
+
+    // 0. ¿Se ha leído bien? Si los conceptos no suman los totales del propio PDF, no culpamos a la empresa.
+    if (t.dev == null || t.ded == null || t.liq == null || sumDev !== t.dev || sumDed !== t.ded) {
+      add('lectura', 'No he podido leer bien esta nómina',
+        `Los conceptos que he leído suman ${eur(sumDev)} de devengos y ${eur(sumDed)} de descuentos, y los totales del PDF son ${eur(t.dev)} y ${eur(t.ded)}. Puede ser un fallo mío al leer el PDF o un error de suma en la nómina. Compruébala a mano antes de reclamar.`);
+      return res;
+    }
+    add('ok', 'Totales', `Devengos ${eur(sumDev)}, descuentos ${eur(sumDed)}.`);
+    if (t.dev - t.ded === t.liq) add('ok', 'Líquido a percibir', `${eur(t.dev)} − ${eur(t.ded)} = ${eur(t.liq)}.`);
+    else add('mal', 'Líquido a percibir', `Debería ser ${eur(t.dev - t.ded)} y la nómina pone ${eur(t.liq)}.`);
+
+    const fijCods = FIJOS.map(f => f.cod);
+    const esPagaCod = (c) => /^40\d\d$/.test(c) || /^49\d\d$/.test(c);
+    const raros = n.lineas.filter(l => n.tipo === 'extra' ? (!fijCods.includes(l.cod) && !CONOCIDOS[l.cod] && !esPagaCod(l.cod) && !(l.ded != null && l.a === t.dev && l.b != null)) : (!fijCods.includes(l.cod) && (!CONOCIDOS[l.cod] || (esPagaCod(l.cod) && l.cod !== '4920'))));
+    if (raros.length) add('nuevo', `${raros.length} ${plural(raros.length, 'concepto que no conozco', 'conceptos que no conozco')}`,
+      raros.map(l => `${l.cod} ${l.concepto} (${l.dev != null ? eur(l.dev) : '−' + eur(l.ded)})`).join(', ') + '. No sé si cotiza o lleva IRPF, así que no puedo dar la nómina por buena. Pregunta en administración qué es.');
+    const blando = (estado) => raros.length && estado === 'mal' ? 'duda' : estado;
+    const notaRaros = raros.length ? ' Puede deberse al concepto que no conozco.' : '';
+
+    if (n.tipo === 'extra') return comprobarExtra(n, ctx, res, add);
+    if (esComplementaria(n)) return comprobarComplementaria(n, res, add, blando, notaRaros);
+
+    const act = n.lineas.filter(l => !l.r);
+    const atr = n.lineas.filter(l => l.r);
+    const get = (cod) => act.find(l => l.cod === cod);
+    const ss = ssDe(n.mes);
+
+    // Días de baja. Mes comercial de 30 días; si la baja cubre el mes natural entero, no hay días trabajados.
+    const baja = act.find(l => /^PA/.test(l.cod));
+    const diasBaja = baja ? Math.round((baja.b || 0) / 100) : 0;
+    const dMes = diasDelMes(n.mes);
+    const mesEntero = baja && diasBaja >= Math.min(30, dMes);
+    const diasTrab = mesEntero ? 0 : Math.max(0, 30 - diasBaja);
+    const bajaRara = baja && !mesEntero && dMes !== 30; // baja parcial en mes de 28, 29 o 31 días: el reparto puede variar
+    if (baja) add('info', `${diasBaja} días de baja`, `${baja.concepto}: ${diasBaja} días a ${eur(baja.a)}/día = ${eur(baja.dev)}. ${diasTrab ? `El sueldo fijo se paga por ${diasTrab} días.` : 'Mes entero de baja: no hay sueldo fijo.'}`);
+    if (baja && baja.a != null && baja.b != null && mulDiv(baja.a, baja.b, 100) !== baja.dev)
+      add('mal', 'Importe de la baja', `${eur(baja.a)} × ${diasBaja} días = ${eur(mulDiv(baja.a, baja.b, 100))}, pero la nómina pone ${eur(baja.dev)}.`);
+
+    // Sueldo fijo contra el guardado para ese mes
+    const fh = (ctx.perfil || {}).fijosHist || [];
+    const fv = vigente(fh, n.mes);
+    const fvIdx = fv ? fh.slice().sort((a, b) => a.desde.localeCompare(b.desde)).findIndex(h => h.desde === fv.desde) : -1;
+    if (!diasTrab) { /* sin días trabajados no hay fijos que comprobar */ }
+    else if (!fv) add('aviso', 'Sueldo fijo', `No tengo guardado tu sueldo fijo de ${mesLabel(n.mes)}. Puedes guardarlo en Ajustes.`);
+    else if (fv.origen === n.id && fvIdx === 0) add('aviso', 'Sueldo fijo de referencia', 'Es la primera nómina que tengo: uso su sueldo fijo como referencia, así que no lo puedo comparar con nada. Revisa que el salario base y los pluses son los que te tocan.', 'fijoRef');
+    else {
+      const bajadas = [], subidas = [], faltan = [];
+      let totReal = 0, totEsp = 0, baseReal = null, baseEsp = null;
+      for (const f of FIJOS) {
+        const mensual = fv.valores[f.cod];
+        const real = (get(f.cod) || {}).dev || 0;
+        if (mensual == null) { if (real) faltan.push(f.nombre); continue; }
+        let esperado = mulDiv(mensual, diasTrab, 30);
+        // Con baja en un mes de 28, 29 o 31 días se acepta también el reparto por días naturales
+        if (bajaRara && real !== esperado && [mulDiv(mensual, dMes - diasBaja, 30), mulDiv(mensual, dMes - diasBaja, dMes)].includes(real)) esperado = real;
+        totReal += real; totEsp += esperado;
+        if (f.cod === '0001') { baseReal = real; baseEsp = esperado; }
+        if (real < esperado) bajadas.push(`${f.nombre}: ${eur(real)} en vez de ${eur(esperado)}`);
+        else if (real > esperado) subidas.push(`${f.nombre}: ${eur(real)} (antes ${eur(esperado)}, ${pcs(pctCambio(real, esperado))})`);
+      }
+      const absorcion = !baja && bajadas.length && subidas.length && totReal > totEsp;
+      if (baja && (bajadas.length || subidas.length)) add('duda', 'Sueldo fijo distinto de lo esperado con la baja', bajadas.concat(subidas.map(x => x.replace(/, [+-][\d,]+ %\)/, ')'))).join('. ') + `. Con ${diasBaja} días de baja esperaba el sueldo de ${diasTrab} días. Puede que la empresa cuente los días de otra forma; confírmalo en administración.`);
+      else if (absorcion) add('duda', 'Posible absorción de la subida', `Tu sueldo fijo total sube de ${eur(totEsp)} a ${eur(totReal)}, pero algún concepto baja: ${bajadas.join('. ')}. Puede que la empresa haya absorbido parte de la subida en ese plus. Pregunta si es correcto; si lo es, guarda el sueldo nuevo.`, 'absorcion');
+      else if (bajadas.length) add(bajaRara ? 'duda' : 'mal', bajaRara ? 'Sueldo fijo por debajo de lo esperado' : 'Te han bajado el sueldo fijo', bajadas.join('. ') + '.' + (bajaRara ? ` Con la baja en un mes de ${dMes} días el reparto puede ser distinto; confírmalo en administración.` : ''), 'fijoBaja');
+      if (subidas.length && !baja) {
+        const anio = n.mes.slice(0, 4);
+        const prevista = ((ctx.perfil || {}).subidas || SUBIDAS_CONVENIO)[anio];
+        const reales = {}, antes = {};
+        for (const f of FIJOS) { if (fv.valores[f.cod] == null) continue; reales[f.cod] = (get(f.cod) || {}).dev || 0; antes[f.cod] = mulDiv(fv.valores[f.cod], diasTrab, 30); }
+        const trienio = soloAntiguedad(reales, antes);
+        const sa = subidaDelAnio(fh, anio, n.mes);
+        // Siempre se compara con el sueldo de antes de la subida del año (sin la antigüedad, por los trienios)
+        const ref = sa ? sa.ref : fv;
+        const refEsc = {}; for (const c of Object.keys(ref.valores)) refEsc[c] = mulDiv(ref.valores[c], diasTrab, 30);
+        const desv = prevista == null || (sa && sa.confirmada) ? [] : desviosSubida(reales, refEsc, prevista, ['0013']);
+        const antigMas = !trienio && prevista != null && desviosSubida(reales, refEsc, prevista).some(d => /antigüedad/.test(d)) && !desv.length;
+        let nota;
+        if (desv.length) nota = ` Respecto a tu sueldo de ${mesLabel(ref.desde)}, el convenio prevé un ${pc(prevista)} para ${anio} y no cuadra: ${desv.join('; ')}. Pregunta por la diferencia.`;
+        else if (trienio) nota = ' Solo sube la antigüedad: puede ser un trienio. Confírmalo y guárdalo como tu sueldo nuevo.';
+        else if (sa && sa.subida.desde < n.mes) nota = ` La subida de convenio de ${anio} ya la tenías desde ${mesLabel(sa.subida.desde)}; esta es otra. Pregunta de qué es y guárdala si es correcta.`;
+        else nota = prevista == null ? '' : ` Es la subida que prevé el convenio para ${anio} (${pc(prevista)}).${antigMas ? ' La antigüedad sube más: puede ser también un trienio.' : ''} Guárdalo como tu sueldo nuevo.`;
+        add(desv.length ? 'duda' : 'aviso', desv.length ? 'Tu sueldo fijo ha subido, pero no lo que marca el convenio' : trienio ? 'Posible trienio' : 'Tu sueldo fijo ha subido', subidas.join('. ') + '.' + nota, desv.length ? 'subidaDistinta' : 'fijoSube');
+      }
+      if (faltan.length) add('aviso', 'Sueldo fijo incompleto', `No tengo guardado: ${faltan.join(', ')}. Guárdalo en Ajustes para poder vigilarlo.`);
+      if (!bajadas.length && !subidas.length) {
+        // ¿El sueldo guardado viene de una subida? Compararla siempre con la del convenio, salvo que la hayas confirmado.
+        const orden = fh.slice().sort((a, b) => a.desde.localeCompare(b.desde));
+        const ant = fvIdx > 0 ? orden[fvIdx - 1] : null;
+        const anio = fv.desde.slice(0, 4);
+        const prevista = ant ? ((ctx.perfil || {}).subidas || SUBIDAS_CONVENIO)[anio] : null;
+        const sa = subidaDelAnio(fh, n.mes.slice(0, 4), n.mes);
+        const prevA = sa ? ((ctx.perfil || {}).subidas || SUBIDAS_CONVENIO)[n.mes.slice(0, 4)] : null;
+        const desv = sa && prevA != null && !sa.confirmada ? desviosSubida(fv.valores, sa.ref.valores, prevA, ['0013']) : [];
+        const sube = ant && Object.keys(fv.valores).some(c => fv.valores[c] > (ant.valores[c] || 0));
+        if (desv.length) add('duda', 'Subida distinta a la del convenio', `Respecto a tu sueldo de ${mesLabel(sa.ref.desde)}, tu sueldo no sube lo que prevé el convenio para ${n.mes.slice(0, 4)} (${pc(prevA)}): ${desv.join('; ')}. Pregunta por la diferencia. Si te lo confirman, confírmalo aquí.`, 'subidaDistinta');
+        const pr = ant ? pctCambio(fv.valores['0001'], ant.valores['0001']) : null;
+        add('ok', 'Sueldo fijo', ant && fv.desde === n.mes && sube ? `Este mes te subieron el sueldo respecto a ${mesLabel(ant.desde)} (salario base de ${eur(ant.valores['0001'])} a ${eur(fv.valores['0001'])}, ${pcs(pr)}).`
+          : diasBaja ? `Coincide con tu sueldo, proporcional a ${diasTrab} días.` : 'Todos los conceptos fijos coinciden con tu sueldo.');
+      }
+    }
+
+    // Prorrata de pagas extra: (salario base + antigüedad + complemento chófer) × 2 / 12
+    const baseExtras = FIJOS.filter(f => f.extra).reduce((s, f) => s + ((get(f.cod) || {}).dev || 0), 0);
+    const ppEsp = mulDiv(baseExtras, 2, 12);
+    if (ppEsp === t.pp) add('ok', 'Parte proporcional de pagas extra', `(${eur(baseExtras)} × 2) ÷ 12 = ${eur(ppEsp)}. Cotiza cada mes aunque las pagas se cobren en junio y diciembre.`);
+    else add('mal', 'Parte proporcional de pagas extra', `Debería ser ${eur(ppEsp)} y la nómina pone ${eur(t.pp)}.`);
+
+    // Base de cotización
+    const cotiza = act.filter(l => l.dev && !/^4/.test(l.cod) && !/^PA/.test(l.cod)).reduce((s, l) => s + l.dev, 0);
+    let baseIT = 0, notaIT = '', baseComprobable = true, dudaBase = false;
+    if (baja) {
+      // Base reguladora: la del mes anterior al inicio de la baja. Candidatos: el mes inmediatamente anterior
+      // y el último mes sin baja (si la baja viene de antes). Me quedo con el que cuadre.
+      const cands = [];
+      const inmediato = nominaDelMes(hist, mesPrev(n.mes));
+      if (inmediato) cands.push(inmediato);
+      let m = mesPrev(n.mes), falta = null;
+      for (let i = 0; i < 12; i++) {
+        const h = nominaDelMes(hist, m);
+        if (!h) { falta = m; break; }
+        if (!esBaja(h)) { if (!cands.includes(h)) cands.push(h); break; }
+        m = mesPrev(m);
+      }
+      const prueba = cands.filter(c => c.tot && c.tot.baseCC != null).map(c => {
+        const diaria = mulDiv(c.tot.baseCC, 1, 30);
+        const opciones = [...new Set([diaria * diasBaja, diaria * Math.min(diasBaja, 30), diaria * Math.max(0, diasBaja - (dMes - 30))])].filter(x => x > 0);
+        return { c, diaria, precio: mulDiv(diaria, 75, 100), baseIT: diaria * diasBaja, opciones };
+      });
+      if (!prueba.length) {
+        baseComprobable = false;
+        add('aviso', 'Base de la baja', `Para comprobar la baja necesito la nómina de ${mesLabel(falta || mesPrev(n.mes))}. Súbela y vuelve a abrir esta.`);
+      } else {
+        const cuadraP = prueba.find(p => baja.a === p.precio);
+        const cuadraB = prueba.find(p => p.opciones.some(o => cotiza + ppEsp + o === t.baseCC));
+        if (cuadraB) cuadraB.baseIT = cuadraB.opciones.find(o => cotiza + ppEsp + o === t.baseCC);
+        const elegido = cuadraP || cuadraB || prueba[prueba.length - 1];
+        const seguro = prueba.length === 1 && elegido.c === inmediato && !esBaja(inmediato);
+        baseIT = elegido.baseIT;
+        notaIT = ` + base de la baja ${eur(baseIT)} (${eur(elegido.c.tot.baseCC)} de ${mesLabel(elegido.c.mes)} ÷ 30 × ${Math.round(baseIT / elegido.diaria)} días)`;
+        dudaBase = !seguro && !cuadraB;
+        if (baja.cod === 'PA20') {
+          if (cuadraP) add('ok', 'Prestación de la baja', `75 % de ${eur(cuadraP.diaria)}/día (base de ${mesLabel(cuadraP.c.mes)}) = ${eur(cuadraP.precio)}/día × ${diasBaja} días = ${eur(baja.dev)}.`);
+          else add(seguro ? 'mal' : 'duda', 'Prestación de la baja', `Con la base de ${prueba.map(p => `${mesLabel(p.c.mes)} saldrían ${eur(p.precio)}/día`).join(' y con la de ')} (75 %), y la nómina pone ${eur(baja.a)}/día.${seguro ? '' : ' La base correcta es la del mes anterior al inicio de la baja; confírmalo.'}`);
+        } else add('aviso', 'Prestación de la baja', `${baja.concepto}: no sé cómo se paga este tipo de baja (solo conozco el accidente de trabajo). No la puedo comprobar.`);
+      }
+    }
+    if (baseComprobable) {
+      const calc = cotiza + ppEsp + baseIT;
+      let baseEsp = calc, notaTope = '', dudaTope = false;
+      if (ss && ss.max != null && calc > ss.max) { baseEsp = ss.max; notaTope = ` Se aplica el tope máximo de ${ss.anio} (${eur(ss.max)}).`; }
+      else if ((!ss || ss.max == null) && calc > TOPE_CONOCIDO && t.baseCC < calc && t.baseCC >= TOPE_CONOCIDO) { dudaTope = true; notaTope = ` Puede que se haya aplicado el tope máximo de ${n.mes.slice(0, 4)}, que todavía no tengo.`; }
+      if (baseEsp === t.baseCC) add('ok', 'Base de cotización', `Conceptos que cotizan ${eur(cotiza)} + pagas extra ${eur(ppEsp)}${notaIT} = ${eur(calc)}.${notaTope}`);
+      else add(dudaTope || dudaBase ? 'duda' : blando('mal'), 'Base de cotización', `Debería ser ${eur(baseEsp)} y la nómina pone ${eur(t.baseCC)}.${notaTope}${notaRaros}`);
+    }
+
+    comprobarSS(n, ss, act, res, add, baseComprobable);
+
+    // Atrasos (líneas R)
+    if (atr.length) {
+      const atrDed = atr.filter(l => l.ded), atrDev = atr.filter(l => l.dev);
+      add('info', 'Atrasos', `Te pagan ${eur(atrDev.reduce((s, l) => s + l.dev, 0))} de atrasos: ` + atrDev.map(l => `${l.concepto.toLowerCase()} ${eur(l.dev)}`).join(', ') + '.');
+      const prev = nominaDelMes(hist, mesPrev(n.mes));
+      let kAtr = 1;
+      // Importe de cada atraso de un concepto fijo = (sueldo de este mes − sueldo anterior) × meses de atraso
+      {
+        const fvAnt = vigente(fh, mesPrev(n.mes));
+        const ok = [], malA = [], sinDato = [], otrosMeses = [], ks = [];
+        for (const l of atrDev.filter(l => fijCods.includes(l.cod))) {
+          const nombre = FIJOS.find(f => f.cod === l.cod).nombre;
+          const cur = diasTrab === 30 ? (get(l.cod) || {}).dev : (fv ? fv.valores[l.cod] : null);
+          const ant = prev && !esBaja(prev) ? ((prev.lineas.find(x => !x.r && x.cod === l.cod) || {}).dev) : (fvAnt ? fvAnt.valores[l.cod] : null);
+          if (cur == null || ant == null) { sinDato.push(nombre); continue; }
+          if (cur <= ant) { otrosMeses.push(`${nombre} (${eur(l.dev)})`); continue; }
+          const d = cur - ant;
+          const k = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].find(m => d * m === l.dev);
+          if (k) ks.push(k);
+          if (k) ok.push(`${nombre}: ${eur(d)}${k > 1 ? ` × ${k} meses` : ''}`);
+          else malA.push(`${nombre}: te pagan ${eur(l.dev)} y la diferencia de sueldo es ${eur(d)} al mes`);
+        }
+        if (otrosMeses.length) add('duda', 'Atrasos de otros meses', `Te pagan atrasos de ${otrosMeses.join(', ').toLowerCase()}, pero tu sueldo no cambió entre ${mesLabel(mesPrev(n.mes))} y este mes, así que no los puedo calcular. Pregunta de qué meses son.`);
+        if (malA.length) add('duda', 'Importe de los atrasos', malA.join('. ') + '. No cuadra con ningún número de meses enteros; pregunta en administración de qué meses son.');
+        else if (ok.length) add('ok', 'Importe de los atrasos', `Cada atraso es la diferencia entre el sueldo nuevo y el anterior: ${ok.join(', ')}.`);
+        if (!malA.length && !otrosMeses.length && ks.length && ks.every(k => k === ks[0])) kAtr = ks[0];
+        if (sinDato.length) add('aviso', 'Importe de los atrasos', `No puedo comprobar ${sinDato.join(', ').toLowerCase()}: necesito la nómina de ${mesLabel(mesPrev(n.mes))} y tu sueldo de este mes.`);
+      }
+      if (ss && prev && prev.tot.baseCC != null && atrDed.length) {
+        const ssPrev = ssDe(prev.mes);
+        const sumR = atrDev.filter(l => l.cod !== '2558').reduce((s, l) => s + l.dev, 0);
+        const dPP = ppEsp - (prev.tot.pp || 0);
+        const nueva = prev.tot.baseCC + sumR + dPP;
+        // Si los atrasos son de k meses, la diferencia de base de cada mes es sumR / k + ΔPP, y la SS se suma k veces
+        const nuevaK = kAtr > 1 && sumR % kAtr === 0 ? prev.tot.baseCC + sumR / kAtr + dPP : null;
+        const mal = [];
+        let usadoK = false;
+        for (const l of atrDed) {
+          if (!ssPrev || !ssPrev.tipos[l.cod]) continue;
+          const esp = ssLinea(ssPrev.tipos, l.cod, nueva) - ssLinea(ssPrev.tipos, l.cod, prev.tot.baseCC);
+          const espK = nuevaK != null ? kAtr * (ssLinea(ssPrev.tipos, l.cod, nuevaK) - ssLinea(ssPrev.tipos, l.cod, prev.tot.baseCC)) : null;
+          if (esp === l.ded) continue;
+          if (espK === l.ded) { usadoK = true; continue; }
+          mal.push(`${CONOCIDOS[l.cod]}: ${eur(l.ded)}, y ${espK != null ? `por ${kAtr} meses serían ${eur(espK)}` : `si fueran solo de ${mesLabel(prev.mes)} serían ${eur(esp)}`}`);
+        }
+        if (!mal.length) add('ok', 'Seguridad Social de los atrasos', usadoK ? `Atrasos de ${kAtr} meses: la diferencia de cotización de cada mes × ${kAtr} cuadra: ${eur(atrDed.reduce((s, l) => s + l.ded, 0))}.` : `Recalculando ${mesLabel(prev.mes)} con la base nueva (${eur(nueva)}), la diferencia cuadra: ${eur(atrDed.reduce((s, l) => s + l.ded, 0))}.`);
+        else add('duda', 'Seguridad Social de los atrasos', mal.join('. ') + '. Puede que los atrasos sean de varios meses; pregunta en administración de qué meses son.');
+      } else if (atrDed.length) add('aviso', 'Seguridad Social de los atrasos', `Para comprobarla necesito la nómina de ${mesLabel(mesPrev(n.mes))}.`);
+    }
+
+    // Diferencia de paga extra: paga nueva (con el sueldo de este mes) − paga ya cobrada
+    const dpe = get('4920');
+    if (dpe) {
+      const ext = Object.values(hist).filter(h => h.tipo === 'extra' && h.mes.slice(0, 4) === n.mes.slice(0, 4) && h.mes <= n.mes).sort((a, b) => b.mes.localeCompare(a.mes))[0];
+      const fvx = diasTrab === 30 ? baseExtras : (fv ? FIJOS.filter(f => f.extra).reduce((s, f) => s + (fv.valores[f.cod] || 0), 0) : null);
+      if (!ext || ext.tot.dev == null) add('aviso', 'Diferencia de la paga extra', `Te pagan ${eur(dpe.dev)}. Para comprobarlo sube el recibo de la paga extra.`);
+      else if (fvx == null) add('aviso', 'Diferencia de la paga extra', `Te pagan ${eur(dpe.dev)}. Para comprobarlo guarda tu sueldo fijo de ${mesLabel(n.mes)}.`);
+      else {
+        const esp = fvx - ext.tot.dev;
+        if (esp === dpe.dev) add('ok', 'Diferencia de la paga extra', `La paga de ${mesLabel(ext.mes)} se pagó con ${eur(ext.tot.dev)}; con el sueldo de este mes son ${eur(fvx)}. Diferencia: ${eur(esp)}.`);
+        else add(diasTrab === 30 ? 'mal' : 'duda', 'Diferencia de la paga extra', `Con el sueldo de este mes la diferencia sería ${eur(esp)} y la nómina pone ${eur(dpe.dev)}.`);
+      }
+    }
+
+    // IRPF
+    comprobarIRPF(n, act, atr, hist, add, blando, notaRaros);
+
+    // ---- Variables del mes anterior ----
+    const mesTrab = mesPrev(n.mes);
+    const pv = vigente((ctx.perfil || {}).preciosHist, mesTrab) || { sabado: 8000, festivo: 13000, viaje: 5000 };
+    const { c: cuenta, ex, dup, noSab, dobles } = contarExtras(ctx.extras, mesTrab);
+    const espExtras = cuenta.sabado * pv.sabado + cuenta.festivo * pv.festivo + cuenta.viaje * pv.viaje;
+    const compls = Object.values(hist).filter(h => h.tipo === 'mensual' && h.mes === n.mes && h.id !== n.id && esComplementaria(h));
+    const deCompl = (cod) => compls.reduce((s, h) => s + h.lineas.filter(l => !l.r && l.cod === cod).reduce((a, l) => a + (l.dev || 0), 0), 0);
+    const gratCompl = deCompl('2524'), comCompl = deCompl('2545');
+    const grat = act.filter(l => l.cod === '2524').reduce((s, l) => s + l.dev, 0) + gratCompl;
+    if (gratCompl || comCompl) add('info', 'Nómina complementaria del mes', `Sumo lo que trae la complementaria: ${[gratCompl && `gratificación ${eur(gratCompl)}`, comCompl && `comisión ${eur(comCompl)}`].filter(Boolean).join(', ')}.`);
+    const desc = [cuenta.sabado && `${cuenta.sabado} ${plural(cuenta.sabado, 'sábado', 'sábados')}`, cuenta.festivo && `${cuenta.festivo} ${plural(cuenta.festivo, 'festivo', 'festivos')}`, cuenta.viaje && `${cuenta.viaje} ${plural(cuenta.viaje, 'viaje extra', 'viajes extra')}`].filter(Boolean).join(', ');
+    const supuesto = ' (suponiendo que los extras se pagan en la gratificación voluntaria)';
+    if (!ex.length && !grat) add('ok', 'Extras', `No tienes extras apuntados en ${mesLabel(mesTrab)} y no hay gratificación.`);
+    else if (!ex.length) add('aviso', 'Extras', `Cobras ${eur(grat)} de gratificación voluntaria, pero no tienes extras apuntados en ${mesLabel(mesTrab)}.`);
+    else if (grat === espExtras) add('ok', 'Extras', `${desc} en ${mesLabel(mesTrab)} = ${eur(espExtras)}, igual que la gratificación voluntaria${supuesto}.`);
+    else add(blando('mal'), 'Extras', `${desc} en ${mesLabel(mesTrab)} = ${eur(espExtras)}, pero la gratificación es ${eur(grat)}. ${dif(espExtras, grat)}${supuesto}${notaRaros}`);
+    if (dup.length) add('aviso', 'Extras repetidos', `Tienes apuntado dos veces lo mismo el ${dup.map(e => fechaCorta(e.fecha)).join(', ')}. Si es un error, quítalo en Extras.${dup.some(e => e.tipo === 'viaje') ? ' Los viajes repetidos sí los cuento, por si hiciste dos.' : ''}`);
+    if (dobles.length) add('aviso', 'Sábado y festivo el mismo día', `El ${dobles.map(e => fechaCorta(e.fecha)).join(', ')} está como sábado y como festivo. Lo cuento solo como festivo.`);
+    if (noSab.length) add('aviso', 'Sábados que no son sábado', `El ${noSab.map(e => fechaCorta(e.fecha)).join(', ')} no ${plural(noSab.length, 'cae', 'caen')} en sábado.`);
+
+    const comL = get('2545');
+    const com = comL || comCompl ? { dev: (comL ? comL.dev : 0) + comCompl } : null;
+    const datos = (ctx.comisiones || {})[mesTrab];
+    if (com) {
+      if (!datos || (datos.puntos == null && datos.euros == null)) add('aviso', 'Comisión', `Cobras ${eur(com.dev)}. Apunta tus puntos de ${mesLabel(mesTrab)} para comprobarla.`);
+      else {
+        const ccfg = vigente((ctx.perfil || {}).comisionHist, mesTrab) || COMISION_DEF;
+        const base = datos.euros != null ? datos.euros : comisionDe(datos.puntos, ccfg);
+        const esp = base + (datos.extra || 0);
+        const txt = (datos.euros != null ? `Comisión ${eur(datos.euros)}` : `${datos.puntos.toLocaleString('es-ES')} puntos = ${eur(base)}`) + (datos.extra ? ` + extra de verano ${eur(datos.extra)}` : '');
+        const tot = datos.extra ? ` = ${eur(esp)}` : '';
+        if (esp === com.dev) add('ok', 'Comisión', `${txt}${tot}, igual que la nómina.`);
+        else add(blando('mal'), 'Comisión', `${txt}${tot}, pero la nómina pone ${eur(com.dev)}. ${dif(esp, com.dev)}${notaRaros}`);
+      }
+    } else if (datos && (datos.puntos != null || datos.euros != null)) {
+      const ccfg = vigente((ctx.perfil || {}).comisionHist, mesTrab) || COMISION_DEF;
+      const esp = (datos.euros != null ? datos.euros : comisionDe(datos.puntos, ccfg)) + (datos.extra || 0);
+      if (esp === 0) add('ok', 'Comisión', `Comisión de ${mesLabel(mesTrab)}: 0 €, y la nómina no trae comisión.`);
+      else add(blando('mal'), 'Comisión', `Tienes ${eur(esp)} de comisión apuntada en ${mesLabel(mesTrab)} pero la nómina no trae comisión.${notaRaros}`);
+    }
+
+    const otros = act.filter(l => NO_COMPROBABLES.includes(l.cod));
+    if (otros.length) add('aviso', 'No lo puedo comprobar', otros.map(l => `${l.concepto.toLowerCase()}: ${eur(l.dev)}`).join(', ') + '. Si no sabes de dónde sale, pregunta en administración.');
+    return res;
+  }
+
+  function comprobarSS(n, ss, act, res, add, baseComprobable) {
+    const t = n.tot;
+    const get = (cod) => act.find(l => l.cod === cod);
+    if (!ss) { add('aviso', 'Seguridad Social', `No tengo los porcentajes de ${n.mes.slice(0, 4)}.`); return; }
+    const ssMal = [];
+    let ssTot = 0;
+    for (const cod of Object.keys(ss.tipos)) {
+      const l = get(cod);
+      if (!l) { ssMal.push(`falta ${CONOCIDOS[cod]}`); continue; }
+      ssTot += l.ded;
+      const esp = ssLinea(ss.tipos, cod, t.baseCC);
+      if (l.b !== sumTipos(ss.tipos, cod)) ssMal.push(`${CONOCIDOS[cod]}: aplican ${pc(l.b)} y en ${n.mes.slice(0, 4)} debería ser ${pc(sumTipos(ss.tipos, cod))}`);
+      else if (l.a !== t.baseCC) ssMal.push(`${CONOCIDOS[cod]}: calculado sobre ${eur(l.a)} en vez de la base ${eur(t.baseCC)}`);
+      else if (l.ded !== esp) ssMal.push(`${CONOCIDOS[cod]}: ${eur(l.ded)} en vez de ${eur(esp)}`);
+    }
+    const totalPct = Object.keys(ss.tipos).reduce((s, c) => s + sumTipos(ss.tipos, c), 0);
+    const seguro = ss.exacto && !ss.pendiente;
+    const nota = (!ss.exacto ? ` Uso los porcentajes de ${ss.anio}; puede que hayan cambiado.` : '') + (ss.pendiente ? ' El porcentaje de este año está pendiente de confirmar.' : '') + (!baseComprobable ? ' Calculado sobre la base de la nómina, que no he podido comprobar.' : '');
+    if (!ssMal.length) add(seguro ? 'ok' : 'aviso', 'Seguridad Social', `${pc(totalPct)} de ${eur(t.baseCC)} = ${eur(ssTot)}.${nota}`);
+    else add(seguro ? 'mal' : 'duda', 'Seguridad Social', ssMal.join('. ') + '.' + nota);
+  }
+
+  function comprobarIRPF(n, act, atr, hist, add, blando, notaRaros) {
+    const t = n.tot;
+    const ir = act.find(l => l.cod === '/401');
+    if (!ir) { add('aviso', 'IRPF', 'No encuentro la línea de IRPF.'); return; }
+    const p = ir.b;
+    const atrIRPF = atr.reduce((s, l) => s + (l.dev || 0), 0);
+    const esperado = atrIRPF ? pct(t.dev - atrIRPF, p) + pct(atrIRPF, p) : pct(t.dev, p);
+    const otraForma = atrIRPF ? pct(t.dev, p) : null;
+    const prevN = nominaDelMes(hist, mesPrev(n.mes));
+    const cambio = prevN && prevN.irpfPct != null && prevN.irpfPct !== p ? ` Ojo: el mes anterior era ${pc(prevN.irpfPct)}. Si no sabes por qué ha cambiado, pregunta.` : '';
+    if (ir.a !== t.dev) add(blando('mal'), 'IRPF', `Se calcula sobre ${eur(ir.a)} pero has cobrado ${eur(t.dev)}.${notaRaros}`);
+    else if (ir.ded === esperado) add(cambio ? 'aviso' : 'ok', `IRPF al ${pc(p)}`, `${pc(p)} de ${eur(t.dev)} = ${eur(ir.ded)}.${atrIRPF ? ' Los atrasos se calculan aparte.' : ''} Compruebo que esté bien aplicado, no si el porcentaje es el que te toca.${cambio}`);
+    else if (otraForma != null && ir.ded === otraForma) add('duda', 'IRPF', `${eur(ir.ded)}: sale de calcular el ${pc(p)} sobre todo junto, pero la empresa suele calcular los atrasos aparte (${eur(esperado)}). Es un céntimo de diferencia; pregunta si quieres.`);
+    else add('mal', 'IRPF', `El ${pc(p)} de ${eur(t.dev)} da ${eur(esperado)} y la nómina pone ${eur(ir.ded)}.`);
+  }
+
+  // Nómina complementaria (sin sueldo fijo): solo sus propias cuentas
+  function comprobarComplementaria(n, res, add, blando, notaRaros) {
+    const t = n.tot;
+    add('info', 'Nómina complementaria', 'No trae sueldo fijo, así que es una nómina aparte (un ajuste o atraso). Compruebo solo sus cuentas; el sueldo, los extras y la comisión se comprueban en la nómina principal del mes.');
+    const ss = ssDe(n.mes);
+    const lss = n.lineas.filter(l => ss && ss.tipos[l.cod] && !l.r);
+    // Atrasos (líneas R): el porcentaje viene en la columna de la base; compruebo el porcentaje, no el importe
+    const lssR = n.lineas.filter(l => l.r && ss && ss.tipos[l.cod]);
+    if (lssR.length) {
+      const ssA = ssDe(mesPrev(n.mes)) || ss;
+      const malR = lssR.filter(l => (l.b != null ? l.b : l.a) !== sumTipos(ssA.tipos, l.cod));
+      if (malR.length) add(ssA.exacto && !ssA.pendiente ? 'mal' : 'duda', 'Seguridad Social de los atrasos', malR.map(l => `${CONOCIDOS[l.cod]}: aplican ${pc(l.b != null ? l.b : l.a)} y debería ser ${pc(sumTipos(ssA.tipos, l.cod))}`).join('. ') + '.');
+      else add('aviso', 'Seguridad Social de los atrasos', 'Los porcentajes son correctos. El importe depende de la base de los meses atrasados y no lo puedo comprobar en una nómina aparte.');
+    }
+    if (ss && lss.length) {
+      const mal = [];
+      for (const l of lss) {
+        if (l.a == null) continue;
+        if (l.b !== sumTipos(ss.tipos, l.cod)) mal.push(`${CONOCIDOS[l.cod]}: aplican ${pc(l.b)} y debería ser ${pc(sumTipos(ss.tipos, l.cod))}`);
+        else if (l.ded !== ssLinea(ss.tipos, l.cod, l.a)) mal.push(`${CONOCIDOS[l.cod]}: ${eur(l.ded)} en vez de ${eur(ssLinea(ss.tipos, l.cod, l.a))}`);
+      }
+      if (!mal.length) add('ok', 'Seguridad Social', 'Los porcentajes están bien aplicados sobre su base.');
+      else add(ss.exacto && !ss.pendiente ? 'mal' : 'duda', 'Seguridad Social', mal.join('. ') + '.');
+    }
+    const ir = n.lineas.find(l => l.cod === '/401');
+    if (ir) {
+      if (ir.a !== t.dev) add(blando('duda'), 'IRPF', `Se calcula sobre ${eur(ir.a)} y esta nómina suma ${eur(t.dev)}.${notaRaros}`);
+      else {
+        const atrIRPF = n.lineas.filter(l => l.r).reduce((s, l) => s + (l.dev || 0), 0);
+        const sep = atrIRPF && atrIRPF !== t.dev;
+        const esperado = sep ? pct(t.dev - atrIRPF, ir.b) + pct(atrIRPF, ir.b) : pct(t.dev, ir.b);
+        if (ir.ded === esperado) add('ok', `IRPF al ${pc(ir.b)}`, `${pc(ir.b)} de ${eur(t.dev)} = ${eur(ir.ded)}.`);
+        else if (sep && ir.ded === pct(t.dev, ir.b)) add('duda', 'IRPF', `${eur(ir.ded)}: calculado todo junto en vez de los atrasos aparte (${eur(esperado)}).`);
+        else add('mal', 'IRPF', `El ${pc(ir.b)} de ${eur(t.dev)} da ${eur(esperado)} y la nómina pone ${eur(ir.ded)}.`);
+      }
+    }
+    return res;
+  }
+
+  function comprobarExtra(n, ctx, res, add) {
+    const hist = ctx.historial || {};
+    const t = n.tot;
+    const devs = n.lineas.filter(l => l.dev);
+    const ir = n.lineas.find(l => l.ded != null && (/^49\d\d$/.test(l.cod) || l.cod === '/401')) || n.lineas.find(l => l.ded != null && l.a === t.dev && l.b != null && !['/350', '/370', '/380'].includes(l.cod));
+    const otrosDesc = n.lineas.filter(l => l.ded && l !== ir);
+    if (!devs.length) { add('aviso', 'Importe de la paga', 'No encuentro el importe de la paga en el recibo.'); return res; }
+    if (devs.length > 1) add('mal', 'Líneas de más en la paga', `El recibo trae ${devs.length} importes: ${devs.map(l => `${l.concepto.toLowerCase()} ${eur(l.dev)}`).join(', ')}. Una paga extra normal trae solo uno. Pregunta qué es lo demás.`);
+    const ssDesc = otrosDesc.filter(l => ['/350', '/370', '/380'].includes(l.cod)), otros2 = otrosDesc.filter(l => !ssDesc.includes(l));
+    if (otros2.length) add('duda', 'Descuentos que no conozco', `${otros2.map(l => `${l.cod} ${l.concepto.toLowerCase()} ${eur(l.ded)}`).join(', ')}. Una paga extra normalmente solo lleva IRPF; pregunta qué es.`);
+    if (ssDesc.length) add('mal', 'Descuentos que no tocan', `${ssDesc.map(l => `${l.concepto.toLowerCase()} ${eur(l.ded)}`).join(', ')}. La paga extra solo lleva IRPF: la Seguridad Social ya se cotiza cada mes.`);
+    const paga = devs.find(l => /^40\d\d$/.test(l.cod)) || devs[0];
+    // semestre que cubre la paga: junio -> ene-jun; diciembre -> jul-dic
+    const [y, m] = n.mes.split('-').map(Number);
+    const ini = y + '-' + (m <= 6 ? '01' : '07');
+    const conBaja = Object.values(hist).some(h => h.tipo === 'mensual' && h.mes >= ini && h.mes <= n.mes && esBaja(h));
+    // Sueldo de referencia: la nómina del mes anterior (completa y sin baja); si no, el sueldo guardado para ese mes
+    const mesAnt = mesPrev(n.mes);
+    const prev = nominaDelMes(hist, mesAnt);
+    let esp = null, ref = '', deNomina = false;
+    if (prev && !esBaja(prev)) { esp = FIJOS.filter(f => f.extra).reduce((s, f) => s + ((prev.lineas.find(l => !l.r && l.cod === f.cod) || {}).dev || 0), 0); ref = `de ${mesLabel(prev.mes)}`; deNomina = true; }
+    else {
+      const fv = vigente((ctx.perfil || {}).fijosHist, mesAnt);
+      if (fv && ['0001', '0013', '0054'].every(c => fv.valores[c] != null)) { esp = fv.valores['0001'] + fv.valores['0013'] + fv.valores['0054']; ref = `guardado para ${mesLabel(mesAnt)}`; }
+    }
+    if (esp == null) add('aviso', 'Importe de la paga', `Para comprobarlo sube la nómina de ${mesLabel(mesAnt)} o guarda tu sueldo fijo.`);
+    else if (esp === paga.dev) add('ok', 'Importe de la paga', `Salario base + antigüedad + complemento chófer ${ref} = ${eur(esp)}.`);
+    else if (!deNomina) add('duda', 'Importe de la paga', `Con tu sueldo ${ref} serían ${eur(esp)} y el recibo pone ${eur(paga.dev)}. Puede que te hayan subido el sueldo; sube la nómina de ${mesLabel(mesAnt)} para comprobarlo bien.`);
+    else if (conBaja) add('duda', 'Importe de la paga', `Con tu sueldo ${ref} serían ${eur(esp)} y el recibo pone ${eur(paga.dev)}. En este semestre has tenido baja y no sé cómo afecta a la paga en tu convenio: pregúntalo.`);
+    else add('mal', 'Importe de la paga', `Con tu sueldo ${ref} serían ${eur(esp)} y el recibo pone ${eur(paga.dev)}. ${dif(esp, paga.dev)}`);
+    if (!ir) add('aviso', 'IRPF', 'No encuentro el IRPF de la paga en el recibo.');
+    else {
+      const e = pct(t.dev, ir.b);
+      if (ir.a != null && ir.a !== t.dev) add('mal', 'IRPF', `Se calcula sobre ${eur(ir.a)} y la paga suma ${eur(t.dev)}.`);
+      else if (e === ir.ded) add('ok', `IRPF al ${pc(ir.b)}`, `${pc(ir.b)} de ${eur(t.dev)} = ${eur(e)}. La paga extra no lleva Seguridad Social porque ya se cotiza cada mes.`);
+      else add('mal', 'IRPF', `El ${pc(ir.b)} de ${eur(t.dev)} da ${eur(e)} y el recibo pone ${eur(ir.ded)}.`);
+    }
+    return res;
+  }
+
+  // Veredicto general
+  function veredicto(res) {
+    const c = (e) => res.filter(r => r.estado === e).length;
+    if (c('lectura')) return { estado: 'mal', titulo: 'No he podido leer bien esta nómina', texto: 'No te puedo decir si está bien. Mira el detalle abajo.' };
+    const mal = c('mal'), duda = c('duda'), nuevo = c('nuevo'), av = c('aviso');
+    if (mal) return { estado: 'mal', titulo: `Revisa ${mal} ${plural(mal, 'punto', 'puntos')}`, texto: 'Hay cosas que no cuadran. Tienes el detalle abajo.' + (duda ? ` Además hay ${duda} ${plural(duda, 'diferencia', 'diferencias')} que no puedo confirmar.` : '') };
+    if (duda) return { estado: 'aviso', titulo: 'Hay diferencias que no puedo confirmar', texto: `${duda} ${plural(duda, 'cosa no cuadra', 'cosas no cuadran')}, pero puede tener explicación. Pregunta en administración con el detalle de abajo.` };
+    if (nuevo) return { estado: 'aviso', titulo: 'Sin veredicto completo', texto: 'Hay un concepto que no conozco. Lo demás que he comprobado cuadra.' };
+    if (av) return { estado: 'aviso', titulo: 'Cuentas correctas', texto: `Lo que he podido calcular cuadra, pero ${plural(av, 'queda 1 cosa', 'quedan ' + av + ' cosas')} por comprobar o revisar.` };
+    return { estado: 'ok', titulo: 'Nómina correcta', texto: 'Todo lo comprobable cuadra al céntimo.' };
+  }
+
+  return { SUBIDAS_CONVENIO, COMISION_DEF, parse, comprobar, veredicto, fijosDe, historialFijos, vigente, esBaja, esComplementaria, nominaDelMes, contarExtras, eur, cents, leerNumero, mesLabel, mesPrev, mesSig, comisionDe, ssDe, FIJOS, MESES };
+})();
+
+
+</script>
+<script>
+(() => {
+const $ = (id) => document.getElementById(id);
+const KEY = 'miNominaAlCentimo.v1';
+const KEY_ANTES = KEY + '.antesDeRestaurar';
+const TIPOS = { sabado: 'Sábado', festivo: 'Festivo', viaje: 'Viaje extra' };
+const DEF_PRECIOS = { desde: '2000-01', sabado: 8000, festivo: 13000, viaje: 5000 };
+const DEF_COMISION = { desde: '2000-01', minimo: 40800, base: 40800, umbral: 6300, porPunto: 192 };
+// Desde la comisión de abril 2026 (nómina de mayo) el mínimo es 408,24 €; por encima de 6.300 puntos la cuenta sigue empezando en 408 €
+const DEF_COMISION_HIST = [{ ...DEF_COMISION }, { desde: '2026-04', minimo: 40824, base: 40800, umbral: 6300, porPunto: 192 }];
+const eur = NC.eur;
+const NOMBRE_EST = { ok: 'Correcto', mal: 'Error', duda: 'Diferencia sin confirmar', aviso: 'Pendiente', info: 'Información', nuevo: 'Concepto desconocido', lectura: 'Error de lectura' };
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const hoy = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const toC = (txt) => { const v = NC.leerNumero(txt); return v == null ? null : Math.round(v * 100); };
+const fromC = (c) => c == null ? '' : (c / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esMes = (s) => typeof s === 'string' && /^\d{4}-\d{2}$/.test(s);
+const esFecha = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const entero = (v) => Number.isInteger(v);
+
+// ---------- Estado: validar y completar (al arrancar y al restaurar) ----------
+function normalizar(d) {
+  if (!d || typeof d !== 'object') throw new Error('sin datos');
+  const p = d.perfil && typeof d.perfil === 'object' ? d.perfil : {};
+  const S = { perfil: {}, extras: [], comisiones: {}, historial: {}, ultimaCopia: entero(d.ultimaCopia) ? d.ultimaCopia : null, rev: entero(d.rev) ? d.rev : 0, descartadasVistas: entero(d.descartadasVistas) ? d.descartadasVistas : 0 };
+  // historial de nóminas
+  S.descartadas = Array.isArray(d.descartadas) ? d.descartadas.slice(0, 50) : [];
+  const okLinea = (l) => l && typeof l === 'object' && typeof l.cod === 'string' && ['a', 'b', 'dev', 'ded'].every(k => l[k] == null || entero(l[k]));
+  if (d.historial && typeof d.historial === 'object') {
+    for (const [id, n] of Object.entries(d.historial)) {
+      try {
+        if (n && esMes(n.mes) && Array.isArray(n.lineas) && n.lineas.every(okLinea) && n.tot && typeof n.tot === 'object' && (n.tipo === 'mensual' || n.tipo === 'extra')) S.historial[id] = n;
+        else S.descartadas.push({ id, datos: n });
+      } catch (e) { S.descartadas.push({ id, datos: n }); }
+    }
+  }
+  // sueldo fijo con fechas (formato antiguo: perfil.fijos sin fecha)
+  const okVal = (v) => v && typeof v === 'object' && Object.values(v).every(entero);
+  if (Array.isArray(p.fijosHist)) S.perfil.fijosHist = p.fijosHist.filter(f => f && esMes(f.desde) && okVal(f.valores)).map(f => ({ desde: f.desde, valores: f.valores, ...(f.origen ? { origen: String(f.origen) } : {}), ...(f.confirmada === true ? { confirmada: true } : {}) }));
+  else {
+    try { S.perfil.fijosHist = NC.historialFijos(Object.values(S.historial)); } catch (e) { S.perfil.fijosHist = []; }
+    // formato antiguo: un sueldo sin fecha; si no coincide con el aprendido, se conserva como sueldo actual
+    if (okVal(p.fijos) && Object.keys(p.fijos).length) {
+      const ult = S.perfil.fijosHist[S.perfil.fijosHist.length - 1];
+      if (!ult) S.perfil.fijosHist = [{ desde: '2000-01', valores: p.fijos }];
+      else if (JSON.stringify(ult.valores) !== JSON.stringify(p.fijos)) S.perfil.fijosHist.push({ desde: hoy().slice(0, 7) > ult.desde ? hoy().slice(0, 7) : ult.desde, valores: p.fijos });
+    }
+  }
+  const okPrecio = (x) => x && esMes(x.desde) && ['sabado', 'festivo', 'viaje'].every(k => entero(x[k]));
+  S.perfil.preciosHist = Array.isArray(p.preciosHist) ? p.preciosHist.filter(okPrecio) : [];
+  if (!S.perfil.preciosHist.length) S.perfil.preciosHist = [p.precios && ['sabado', 'festivo', 'viaje'].every(k => entero(p.precios[k])) ? { desde: '2000-01', ...p.precios } : { ...DEF_PRECIOS }];
+  const okCom = (x) => x && esMes(x.desde) && entero(x.minimo) && entero(x.umbral) && entero(x.porPunto) && (x.base == null || entero(x.base));
+  // Formato anterior (sin "base"): la base era el mismo mínimo
+  S.perfil.comisionHist = Array.isArray(p.comisionHist) ? p.comisionHist.filter(okCom).map(x => ({ ...x, base: x.base != null ? x.base : x.minimo })) : [];
+  if (!S.perfil.comisionHist.length) S.perfil.comisionHist = p.comision && okCom({ desde: '2000-01', ...p.comision }) ? [{ desde: '2000-01', ...p.comision, base: p.comision.base != null ? p.comision.base : p.comision.minimo }] : DEF_COMISION_HIST.map(x => ({ ...x }));
+  // Si solo estaba la configuración de fábrica antigua (408 € sin cambios), se añade el mínimo de 408,24 € desde abril 2026
+  const ch = S.perfil.comisionHist;
+  if (ch.length === 1 && ch[0].desde === '2000-01' && ch[0].minimo === 40800 && ch[0].base === 40800 && ch[0].umbral === 6300 && ch[0].porPunto === 192) S.perfil.comisionHist = DEF_COMISION_HIST.map(x => ({ ...x }));
+  S.perfil.subidas = { ...NC.SUBIDAS_CONVENIO };
+  if (p.subidas && typeof p.subidas === 'object') for (const [y, v] of Object.entries(p.subidas)) if (/^\d{4}$/.test(y) && entero(v) && v >= 0 && v <= 2000) S.perfil.subidas[y] = v;
+  if (Array.isArray(d.extras)) S.extras = d.extras.filter(e => e && esFecha(e.fecha) && TIPOS[e.tipo]).map(e => ({ id: String(e.id || Math.random().toString(36).slice(2)), fecha: e.fecha, tipo: e.tipo, nota: String(e.nota || '') }));
+  if (d.comisiones && typeof d.comisiones === 'object') {
+    for (const [m, c] of Object.entries(d.comisiones)) {
+      if (!esMes(m) || !c) continue;
+      const v = { puntos: typeof c.puntos === 'number' && isFinite(c.puntos) ? c.puntos : null, euros: entero(c.euros) ? c.euros : null, extra: entero(c.extra) ? c.extra : null };
+      if (v.puntos != null || v.euros != null || v.extra != null) S.comisiones[m] = v;
+    }
+  }
+  return S;
+}
+const KEY_DANADO = KEY + '.danado';
+let S, bloqueado = false, rawDanado = null;
+(() => {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) {}
+  if (!raw) { S = normalizar({}); return; }
+  try {
+    const d = JSON.parse(raw);
+    S = normalizar(d);
+    const antes = d && d.historial && typeof d.historial === 'object' ? Object.keys(d.historial).length : 0;
+    if (Object.keys(S.historial).length < antes) { try { localStorage.setItem(KEY_DANADO, raw); } catch (e) {} }
+  } catch (e) {
+    // datos ilegibles: se guardan aparte y no se sobrescriben hasta que decidas
+    rawDanado = raw; bloqueado = true; S = normalizar({});
+    try { localStorage.setItem(KEY_DANADO, raw); } catch (e2) {}
+  }
+})();
+let undoListo = false, enUndo = false, undoRev = null;
+function caducaUndo(msg) { if (!undoListo) return; undoListo = false; undoRev = null; try { localStorage.removeItem(KEY + '.antesDeRestaurar'); } catch (e) {} const r = document.getElementById('rsUndoRow'); if (r) r.hidden = true; if (msg) toast(msg); }
+// La copia para deshacer una restauración solo vale hasta el siguiente cambio o hasta recargar la página
+try { localStorage.removeItem(KEY + '.antesDeRestaurar'); } catch (e) {}
+function save() {
+  if (bloqueado) { toast('No guardo nada hasta que decidas qué hacer con los datos dañados (arriba)'); return false; }
+  // ¿Otra pestaña ha guardado desde que cargué? Entonces no piso sus datos.
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const rev = JSON.parse(raw).rev || 0; if (rev > (S.rev || 0)) { recargarDeOtraPestana(raw); toast('Había cambios hechos en otra pestaña. Los he cargado: repite lo último que hiciste.'); return false; } }
+  } catch (e) {}
+  S.rev = (S.rev || 0) + 1;
+  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch (e) { S.rev--; toast('No se ha podido guardar en este navegador'); return false; }
+  if (undoListo && !enUndo) caducaUndo();
+  return true;
+}
+function revGuardada() { try { const raw = localStorage.getItem(KEY); return raw ? (JSON.parse(raw).rev || 0) : 0; } catch (e) { return 0; } }
+function recargarDeOtraPestana(raw) {
+  try { S = normalizar(JSON.parse(raw)); } catch (e) { return; }
+  refrescar();
+}
+function refrescar() {
+  if (typeof pintaMes !== 'function') return;
+  pintaRescate(); pintaMes(); pintaFijos(); pintaPrecios(); pintaSubidas(); pintaGuardadas(); pintaCopia();
+  if (actual && S.historial[actual]) verNomina(actual); else { actual = null; $('resultado').innerHTML = ''; }
+}
+window.addEventListener('storage', (e) => {
+  if (e.key === KEY + '.antesDeRestaurar') { if (undoListo && !e.newValue) caducaUndo('Ya no se puede deshacer la restauración: se abrió la calculadora en otra pestaña'); return; }
+  if (e.key !== KEY && e.key !== null) return;
+  if (bloqueado) return;
+  caducaUndo('Ya no se puede deshacer la restauración: hubo cambios en otra pestaña');
+  if (!e.newValue) { S = normalizar({}); refrescar(); toast('Se han borrado los datos desde otra pestaña'); return; }
+  recargarDeOtraPestana(e.newValue); toast('Actualizado con lo que has hecho en otra pestaña');
+});
+function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 3000); }
+// botón de dos pasos: el primer toque pide confirmación
+function dosPasos(btn, texto, accion) {
+  btn.onclick = () => {
+    if (btn.dataset.armado) { accion(); return; }
+    const orig = btn.textContent; btn.dataset.armado = '1'; btn.textContent = texto;
+    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armado; btn.textContent = orig; } }, 4000);
+  };
+}
+
+// Pestañas
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', x === b));
+  ['extras', 'nomina', 'ajustes'].forEach(t => $('v-' + t).hidden = t !== b.dataset.tab);
+});
+
+// ---------- EXTRAS ----------
+let mes = hoy().slice(0, 7), tipoSel = 'sabado';
+const precios = (m) => NC.vigente(S.perfil.preciosHist, m) || DEF_PRECIOS;
+const comCfg = (m) => NC.vigente(S.perfil.comisionHist, m) || DEF_COMISION;
+function pintaTipos() {
+  const p = precios(mes);
+  $('tipos').innerHTML = Object.keys(TIPOS).map(t => `<button class="tipo" aria-pressed="${t === tipoSel}" data-t="${t}"><b>${TIPOS[t]}</b><span>${eur(p[t])}</span></button>`).join('');
+  $('tipos').querySelectorAll('button').forEach(b => b.onclick = () => { tipoSel = b.dataset.t; pintaTipos(); });
+}
+let coPintado = null, coSucio = false;
+function pintaMes() {
+  $('mLabel').textContent = NC.mesLabel(mes);
+  const ex = S.extras.filter(e => e.fecha.slice(0, 7) === mes).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const { c } = NC.contarExtras(S.extras, mes);
+  const p = precios(mes);
+  const totEx = c.sabado * p.sabado + c.festivo * p.festivo + c.viaje * p.viaje;
+  const co = S.comisiones[mes];
+  const coE = co ? ((co.euros != null ? co.euros : (co.puntos != null ? NC.comisionDe(co.puntos, comCfg(mes)) : 0)) + (co.extra || 0)) : null;
+  $('mTot').innerHTML = `<div><small>Sábados</small><b>${c.sabado}</b></div><div><small>Festivos</small><b>${c.festivo}</b></div><div><small>Viajes</small><b>${c.viaje}</b></div><div><small>Extras</small><b>${eur(totEx)}</b></div>`;
+  $('mCobro').innerHTML = `Se cobra en la nómina de <b>${NC.mesLabel(NC.mesSig(mes))}</b>` + (coE != null ? `, junto con <b>${eur(coE)}</b> de comisión.` : '.');
+  $('exList').innerHTML = ex.length ? ex.map(e => `<li><span class="chip ${e.tipo}">${TIPOS[e.tipo]}</span><span><span class="num">${e.fecha.slice(8)}/${e.fecha.slice(5, 7)}</span> ${e.nota ? '· ' + esc(e.nota) : ''}</span><button class="btn small danger" data-id="${esc(e.id)}">Quitar</button></li>`).join('')
+    : `<li style="display:block" class="empty">No hay extras apuntados en ${NC.mesLabel(mes)}. Elige el tipo, la fecha y pulsa Apuntar.</li>`;
+  $('exList').querySelectorAll('button[data-id]').forEach(b => dosPasos(b, '¿Quitar?', () => { S.extras = S.extras.filter(e => e.id !== b.dataset.id); if (!save()) return; pintaMes(); toast('Extra quitado'); }));
+  if (coPintado !== mes || !coSucio) {
+    $('coPuntos').value = co && co.puntos != null ? co.puntos.toLocaleString('es-ES', { maximumFractionDigits: 2 }) : '';
+    $('coEuros').value = co ? fromC(co.euros) : '';
+    $('coExtra').value = co ? fromC(co.extra) : '';
+    coPintado = mes; coSucio = false;
+  }
+  pintaCo();
+  if (!$('exFecha').value || $('exFecha').value.slice(0, 7) !== mes) $('exFecha').value = mes === hoy().slice(0, 7) ? hoy() : mes + '-01';
+  pintaTipos();
+}
+function leerCo() {
+  const raw = { p: $('coPuntos').value.trim(), e: $('coEuros').value.trim(), x: $('coExtra').value.trim() };
+  const puntos = raw.p ? NC.leerNumero(raw.p) : null, euros = raw.e ? toC(raw.e) : null, extra = raw.x ? toC(raw.x) : null;
+  const err = (raw.p && puntos == null) ? 'No entiendo los puntos. Escríbelos así: 8.077,24' : (raw.e && euros == null) ? 'No entiendo los euros' : (raw.x && extra == null) ? 'No entiendo el extra de verano'
+    : (puntos != null && euros != null) ? 'Pon puntos o euros, no los dos' : null;
+  return { puntos: puntos == null ? null : Math.round(puntos * 100) / 100, euros, extra, err, vacio: !raw.p && !raw.e && !raw.x };
+}
+function pintaCo() {
+  const c = leerCo();
+  let t = '';
+  if (c.err) t = c.err;
+  else if (c.euros != null) t = `Comisión: ${eur(c.euros + (c.extra || 0))}`;
+  else if (c.puntos != null) { const b = NC.comisionDe(c.puntos, comCfg(mes)); t = `${c.puntos.toLocaleString('es-ES')} puntos → ${eur(b)}` + (c.extra ? ` + ${eur(c.extra)} = ${eur(b + c.extra)}` : ''); }
+  $('coRes').textContent = t;
+}
+['coPuntos', 'coEuros', 'coExtra'].forEach(id => $(id).oninput = () => { coSucio = true; pintaCo(); });
+$('coSave').onclick = () => {
+  const c = leerCo();
+  if (c.err) { toast(c.err); return; }
+  if (c.vacio) { toast('No hay nada que guardar. Para quitarla usa «Borrar comisión»'); return; }
+  if (c.puntos == null && c.euros == null) { toast('Pon los puntos o los euros de la comisión'); return; }
+  S.comisiones[mes] = { puntos: c.puntos, euros: c.euros, extra: c.extra };
+  if (!save()) return; // si otra pestaña tenía cambios, lo escrito sigue en los campos para volver a guardarlo
+  coSucio = false; pintaMes(); toast('Comisión de ' + NC.mesLabel(mes) + ' guardada');
+};
+dosPasos($('coDel'), '¿Borrar la comisión del mes?', () => { delete S.comisiones[mes]; if (!save()) return; coSucio = false; coPintado = null; pintaMes(); $('coDel').textContent = 'Borrar comisión'; delete $('coDel').dataset.armado; toast('Comisión de ' + NC.mesLabel(mes) + ' borrada'); });
+function cambiaMes(m) { if (coSucio) { toast('No has guardado la comisión de ' + NC.mesLabel(mes) + '. Vuelve y pulsa Guardar.'); return; } mes = m; pintaMes(); }
+$('mPrev').onclick = () => cambiaMes(NC.mesPrev(mes));
+$('mNext').onclick = () => cambiaMes(NC.mesSig(mes));
+let pendiente = null;
+function apuntar(e) {
+  S.extras.push(e);
+  $('exNota').value = ''; $('exWarn').hidden = true; pendiente = null;
+  if (e.fecha.slice(0, 7) !== mes && !coSucio) mes = e.fecha.slice(0, 7);
+  if (!save()) return;
+  pintaMes(); toast(TIPOS[e.tipo] + ' apuntado el ' + e.fecha.slice(8) + '/' + e.fecha.slice(5, 7));
+}
+$('exAdd').onclick = () => {
+  const f = $('exFecha').value;
+  if (!esFecha(f)) { toast('Elige la fecha'); return; }
+  const e = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), fecha: f, tipo: tipoSel, nota: $('exNota').value.trim() };
+  const avisos = [];
+  if (S.extras.some(x => x.fecha === f && x.tipo === tipoSel)) avisos.push(`Ya tienes un ${TIPOS[tipoSel].toLowerCase()} apuntado ese día.`);
+  const otro = tipoSel === 'sabado' ? 'festivo' : tipoSel === 'festivo' ? 'sabado' : null;
+  if (otro && S.extras.some(x => x.fecha === f && x.tipo === otro)) avisos.push(`Ese día ya está como ${TIPOS[otro].toLowerCase()}. Un festivo en sábado se cobra solo como festivo (lo cuento una vez).`);
+  if (tipoSel === 'sabado' && new Date(f + 'T12:00:00').getDay() !== 6) avisos.push('Ese día no es sábado. Si era festivo, elige Festivo.');
+  if (f > hoy()) avisos.push('Esa fecha todavía no ha llegado.');
+  if (avisos.length) { pendiente = e; $('exWarnTxt').textContent = avisos.join(' '); $('exWarn').hidden = false; return; }
+  apuntar(e);
+};
+$('exWarnYes').onclick = () => { if (pendiente) apuntar(pendiente); };
+$('exWarnNo').onclick = () => { pendiente = null; $('exWarn').hidden = true; };
+
+// ---------- NÓMINA ----------
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+async function leerPDF(file) {
+  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), verbosity: 0 }).promise;
+  const items = [];
+  for (let p = 1; p <= doc.numPages; p++) {
+    const tc = await (await doc.getPage(p)).getTextContent();
+    tc.items.forEach(i => items.push({ str: i.str, x: i.transform[4], y: i.transform[5] - (p - 1) * 2000, w: i.width }));
+  }
+  return NC.parse(items);
+}
+const mismaNomina = (a, b) => JSON.stringify(a.lineas) === JSON.stringify(b.lineas) && JSON.stringify(a.tot) === JSON.stringify(b.tot);
+async function subir(files) {
+  const lista = [];
+  if (!window.pdfjsLib) { lista.push(['mal', 'No se ha cargado el lector de PDF. Comprueba la conexión a internet y recarga la página.']); pintaErrores(lista); return; }
+  const leidas = [];
+  for (const f of files) {
+    try { const n = await leerPDF(f); leidas.push(n); lista.push(['ok', `${f.name}: ${n.tipo === 'extra' ? 'paga extra de ' : 'nómina de '}${NC.mesLabel(n.mes)}`]); }
+    catch (e) { lista.push(['mal', `${f.name}: no se ha podido leer (${e.message || 'formato desconocido'})`]); }
+  }
+  leidas.sort((a, b) => a.mes.localeCompare(b.mes) || (a.tipo === 'extra' ? -1 : 1));
+  let ultimo = null;
+  for (const n of leidas) {
+    let id = n.id;
+    const prev = S.historial[id];
+    if (prev && !mismaNomina(prev, n)) {
+      let k = 2; while (S.historial[id + '-' + k] && !mismaNomina(S.historial[id + '-' + k], n)) k++;
+      id = id + '-' + k; n.id = id;
+      lista.push(['aviso', NC.esComplementaria(n) ? `Esta es una nómina complementaria de ${NC.mesLabel(n.mes)} (sin sueldo fijo). La guardo aparte y compruebo solo sus cuentas.`
+        : n.tipo === 'mensual' && !NC.esComplementaria(prev) ? `Ya tenías otra nómina completa de ${NC.mesLabel(n.mes)} distinta. La guardo como segunda; para comprobar otros meses uso la primera. Si la buena es esta, quita la otra.`
+        : `Ya tenías otro recibo de ${NC.mesLabel(n.mes)} distinto. Lo guardo como segundo.`]);
+    }
+    S.historial[id] = n; ultimo = id;
+  }
+  if (!S.perfil.fijosHist.length) S.perfil.fijosHist = NC.historialFijos(Object.values(S.historial));
+  if (leidas.length && !save()) { lista.push(['mal', 'No he guardado estas nóminas porque había cambios en otra pestaña. Vuelve a subirlas.']); pintaErrores(lista); return; }
+  pintaFijos(); pintaErrores(lista);
+  if (ultimo) verNomina(ultimo);
+}
+function pintaErrores(lista) {
+  const el = $('errLect');
+  const hayProblema = lista.some(x => x[0] !== 'ok');
+  if (!lista.length) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<div class="row" style="justify-content:space-between"><h3>${hayProblema ? 'Revisa la subida' : 'PDF leídos'}</h3><button class="btn small" id="errCerrar">Cerrar</button></div>` +
+    `<div class="checks">${lista.map(([e, t]) => `<div class="check"><span class="ic ${e}" aria-hidden="true">${e === 'ok' ? '✓' : e === 'mal' ? '!' : '?'}</span><div><p style="margin:0;color:var(--ink)"><span class="sr">${NOMBRE_EST[e]}: </span>${esc(t)}</p></div></div>`).join('')}</div>`;
+  $('errCerrar').onclick = () => { el.hidden = true; };
+}
+$('pdfIn').onchange = (e) => { subir([...e.target.files]); e.target.value = ''; };
+$('pdfBtn').onclick = (e) => { e.stopPropagation(); $('pdfIn').click(); };
+$('drop').onclick = (e) => { if (e.target === $('drop') || e.target.closest('h2, .muted')) $('pdfIn').click(); };
+$('rsFileBtn').onclick = () => $('rsFile').click();
+const drop = $('drop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); subir([...e.dataTransfer.files].filter(f => /pdf/i.test(f.type) || /\.pdf$/i.test(f.name))); });
+
+let actual = null;
+function etiqueta(id) { const n = S.historial[id]; const k = id.match(/-(\d+)$/) && id.split('-').length > 3 ? ' (' + id.split('-').pop() + 'ª)' : ''; return (n.tipo === 'extra' ? 'Paga extra ' : '') + NC.mesLabel(n.mes) + k; }
+function pintaGuardadas() {
+  const ids = Object.keys(S.historial).sort((a, b) => S.historial[b].mes.localeCompare(S.historial[a].mes) || a.localeCompare(b));
+  $('savedPanel').hidden = !ids.length;
+  $('saved').innerHTML = ids.map(id => `<button data-id="${esc(id)}" aria-current="${id === actual}">${esc(etiqueta(id))}</button>`).join('');
+  $('saved').querySelectorAll('button').forEach(b => b.onclick = () => verNomina(b.dataset.id));
+}
+function verNomina(id) {
+  actual = id; pintaGuardadas();
+  const n = S.historial[id];
+  if (!n) { $('resultado').innerHTML = ''; return; }
+  let res, v;
+  try { res = NC.comprobar(n, { perfil: S.perfil, historial: S.historial, extras: S.extras, comisiones: S.comisiones }); v = NC.veredicto(res); }
+  catch (e) { res = [{ estado: 'lectura', titulo: 'Error al comprobar', detalle: 'Algo ha fallado al comprobar esta nómina. Quítala y vuelve a subir el PDF.' }]; v = NC.veredicto(res); }
+  const ic = { ok: '✓', mal: '!', duda: '!', aviso: '?', info: 'i', nuevo: '?', lectura: '!' };
+  const cls = { ok: 'ok', mal: 'mal', duda: 'aviso', aviso: 'aviso', info: 'info', nuevo: 'aviso', lectura: 'mal' };
+  const orden = { lectura: 0, mal: 1, duda: 2, nuevo: 3, aviso: 4, ok: 5, info: 6 };
+  const distinta = res.some(r => r.clave === 'subidaDistinta');
+  const sube = (distinta || res.some(r => r.clave === 'fijoSube' || r.clave === 'absorcion')) && !res.some(r => r.clave === 'fijoBaja') && !NC.esBaja(n);
+  const fvAct = NC.vigente(S.perfil.fijosHist, n.mes);
+  const yaGuardado = fvAct && JSON.stringify(fvAct.valores) === JSON.stringify(NC.fijosDe(n));
+  $('resultado').innerHTML = `<div class="panel">
+    <div class="row" style="justify-content:space-between"><h2>${esc(etiqueta(id))}</h2><button class="btn small danger" id="delNom">Quitar</button></div>
+    <div class="veredicto ${v.estado}"><strong>${esc(v.titulo)}</strong><span>${esc(v.texto)}</span></div>
+    <div class="totales"><div><small>Devengado</small><b>${eur(n.tot.dev)}</b></div><div><small>Descuentos</small><b>${eur(n.tot.ded)}</b></div><div><small>IRPF</small><b>${n.irpfPct != null ? (n.irpfPct / 100).toLocaleString('es-ES', { minimumFractionDigits: 2 }) + ' %' : '—'}</b></div><div><small>Líquido</small><b>${eur(n.tot.liq)}</b></div></div>
+    ${sube ? (distinta ? `<div class="aviso-box"><span>La subida no es la del convenio. Pregunta antes en administración. Si te confirman que es correcta, confírmala aquí y dejaré de avisarte.</span><div class="row"><button class="btn small" id="learn">${yaGuardado ? 'Confirmar que esta subida es correcta' : 'Guardar y confirmar esta subida'}</button></div></div>` : (yaGuardado ? '' : `<button class="btn" id="learn">Guardar la subida como mi sueldo desde ${esc(NC.mesLabel(n.mes))}</button>`)) : ''}
+    <div class="checks">${res.slice().sort((a, b) => orden[a.estado] - orden[b.estado]).map(r => `<div class="check"><span class="ic ${cls[r.estado]}" aria-hidden="true">${ic[r.estado]}</span><div><b><span class="sr">${NOMBRE_EST[r.estado]}: </span>${esc(r.titulo)}</b><p>${esc(r.detalle)}</p></div></div>`).join('')}</div>
+  </div>`;
+  dosPasos($('delNom'), '¿Quitar esta nómina?', () => { delete S.historial[id]; if (!save()) return; actual = null; $('resultado').innerHTML = ''; pintaGuardadas(); toast('Nómina quitada'); });
+  if ($('learn')) {
+    const guardar = () => {
+      const desde = distinta && fvAct && yaGuardado ? fvAct.desde : n.mes;
+      if (!guardarFijos(desde, NC.fijosDe(n), distinta)) return; verNomina(id);
+      toast(distinta ? 'Subida confirmada' : 'Sueldo guardado desde ' + NC.mesLabel(n.mes));
+    };
+    if (distinta) dosPasos($('learn'), '¿Te han confirmado que es correcta?', guardar); else $('learn').onclick = guardar;
+  }
+}
+
+// ---------- AJUSTES ----------
+function guardarFijos(desde, valores, confirmada) {
+  // Si ese mes ya estaba guardado con los mismos importes y confirmado, se conserva la confirmación
+  const prev = S.perfil.fijosHist.find(f => f.desde === desde);
+  const conf = confirmada || (prev && prev.confirmada && JSON.stringify(prev.valores) === JSON.stringify(valores));
+  S.perfil.fijosHist = S.perfil.fijosHist.filter(f => f.desde !== desde).concat([{ desde, valores, ...(conf ? { confirmada: true } : {}) }]).sort((a, b) => a.desde.localeCompare(b.desde));
+  if (!save()) return false;
+  pintaFijos(); return true;
+}
+const etDesde = (d) => d === '2000-01' ? 'Desde el principio' : 'Desde ' + NC.mesLabel(d);
+// lista de historial con "Quitar" en dos pasos
+function listaHist(ul, filas, quitar) {
+  ul.innerHTML = filas.length ? filas.slice().sort((a, b) => b.desde.localeCompare(a.desde)).map(h => `<li><span>${etDesde(h.desde)}: ${h.texto}</span>${filas.length > 1 || quitar.permiteUltimo ? `<button class="btn small danger" data-d="${h.desde}">Quitar</button>` : ''}</li>`).join('') : `<li>${quitar.vacio}</li>`;
+  ul.querySelectorAll('button[data-d]').forEach(b => dosPasos(b, '¿Quitar?', () => quitar.fn(b.dataset.d)));
+}
+function rellenaFijos() {
+  const v = NC.vigente(S.perfil.fijosHist, $('fxDesde').value || hoy().slice(0, 7));
+  NC.FIJOS.forEach(f => { $('fx' + f.cod).value = v && v.valores[f.cod] != null ? fromC(v.valores[f.cod]) : ''; });
+}
+function pintaFijos() {
+  if (!$('fx0001')) $('fijos').innerHTML = NC.FIJOS.map(f => `<label>${f.nombre}<input type="text" inputmode="decimal" id="fx${f.cod}"></label>`).join('');
+  if (!esMes($('fxDesde').value)) $('fxDesde').value = hoy().slice(0, 7);
+  rellenaFijos();
+  listaHist($('fxHist'), S.perfil.fijosHist.map(h => ({ desde: h.desde, texto: 'salario base ' + eur(h.valores['0001']) + ', total ' + eur(Object.values(h.valores).reduce((a, b) => a + b, 0)) })),
+    { permiteUltimo: true, vacio: 'Aún no hay sueldo guardado. Sube una nómina completa o rellénalo aquí.', fn: (d) => { S.perfil.fijosHist = S.perfil.fijosHist.filter(h => h.desde !== d); if (!save()) return; pintaFijos(); toast('Sueldo quitado'); if (actual) verNomina(actual); } });
+}
+$('fxDesde').onchange = rellenaFijos;
+$('fijosSave').onclick = () => {
+  const desde = $('fxDesde').value;
+  if (!esMes(desde)) { toast('Elige el mes desde el que vale'); return; }
+  const o = {};
+  for (const f of NC.FIJOS) {
+    const raw = $('fx' + f.cod).value.trim();
+    if (!raw) { toast(`Rellena ${f.nombre.toLowerCase()} (pon 0 si no lo cobras)`); $('fx' + f.cod).focus(); return; }
+    const v = toC(raw);
+    if (v == null || v < 0 || v > 500000) { toast('No entiendo el importe de ' + f.nombre.toLowerCase()); $('fx' + f.cod).focus(); return; }
+    o[f.cod] = v;
+  }
+  if (!guardarFijos(desde, o)) return; toast('Sueldo guardado desde ' + NC.mesLabel(desde)); if (actual) verNomina(actual);
+};
+const LIM = { sabado: [2000, 50000], festivo: [2000, 50000], viaje: [1000, 50000], minimo: [10000, 200000], base: [10000, 200000], umbral: [500, 50000], porPunto: [50, 1000] };
+function rellenaPrecios() {
+  const m = $('pDesde').value || hoy().slice(0, 7);
+  const p = NC.vigente(S.perfil.preciosHist, m) || DEF_PRECIOS, c = NC.vigente(S.perfil.comisionHist, m) || DEF_COMISION;
+  $('pSab').value = fromC(p.sabado); $('pFes').value = fromC(p.festivo); $('pVia').value = fromC(p.viaje);
+  $('cMin').value = fromC(c.minimo); $('cBase').value = fromC(c.base != null ? c.base : c.minimo); $('cUmb').value = c.umbral.toLocaleString('es-ES'); $('cPP').value = (c.porPunto / 1000).toLocaleString('es-ES', { minimumFractionDigits: 3 });
+}
+function pintaPrecios() {
+  if (!esMes($('pDesde').value)) $('pDesde').value = hoy().slice(0, 7);
+  rellenaPrecios();
+  const filas = {};
+  S.perfil.preciosHist.forEach(h => { filas[h.desde] = (filas[h.desde] || []).concat(`sábado ${eur(h.sabado)}, festivo ${eur(h.festivo)}, viaje ${eur(h.viaje)}`); });
+  S.perfil.comisionHist.forEach(h => { filas[h.desde] = (filas[h.desde] || []).concat(`comisión mínima ${eur(h.minimo)} hasta ${h.umbral.toLocaleString('es-ES')} puntos; por encima ${eur(h.base != null ? h.base : h.minimo)} + ${(h.porPunto / 1000).toLocaleString('es-ES', { minimumFractionDigits: 3 })} €/punto`); });
+  listaHist($('pHist'), Object.keys(filas).map(desde => ({ desde, texto: filas[desde].join('; ') })),
+    { permiteUltimo: false, vacio: '', fn: (d) => {
+      S.perfil.preciosHist = S.perfil.preciosHist.filter(h => h.desde !== d); S.perfil.comisionHist = S.perfil.comisionHist.filter(h => h.desde !== d);
+      if (!S.perfil.preciosHist.length) S.perfil.preciosHist = [{ ...DEF_PRECIOS }];
+      if (!S.perfil.comisionHist.length) S.perfil.comisionHist = DEF_COMISION_HIST.map(x => ({ ...x }));
+      if (!save()) return; pintaPrecios(); pintaMes(); toast('Precios quitados'); if (actual) verNomina(actual); } });
+}
+$('pDesde').onchange = rellenaPrecios;
+function pintaSubidas() {
+  const anios = Object.keys(S.perfil.subidas).sort();
+  $('subidas').innerHTML = anios.map(y => `<label>${y} %<input type="text" inputmode="decimal" id="sub${y}" value="${(S.perfil.subidas[y] / 100).toLocaleString('es-ES', { minimumFractionDigits: 2 })}"></label>`).join('');
+}
+$('subSave').onclick = () => {
+  const o = {};
+  for (const y of Object.keys(S.perfil.subidas)) {
+    const v = NC.leerNumero($('sub' + y).value);
+    if (v == null || v < 0 || v > 20) { toast(`Revisa la subida de ${y} (entre 0 y 20 %)`); return; }
+    o[y] = Math.round(v * 100);
+  }
+  S.perfil.subidas = o; if (!save()) return; toast('Subidas del convenio guardadas'); if (actual) verNomina(actual);
+};
+$('preciosSave').onclick = () => {
+  const desde = $('pDesde').value;
+  if (!esMes(desde)) { toast('Elige el mes desde el que valen'); return; }
+  const p = { desde, sabado: toC($('pSab').value), festivo: toC($('pFes').value), viaje: toC($('pVia').value) };
+  const umb = NC.leerNumero($('cUmb').value), pp = NC.leerNumero($('cPP').value);
+  const c = { desde, minimo: toC($('cMin').value), base: toC($('cBase').value), umbral: umb == null ? null : Math.round(umb), porPunto: pp == null ? null : Math.round(pp * 1000) };
+  const fuera = (k, v) => v == null || v < LIM[k][0] || v > LIM[k][1];
+  if (fuera('sabado', p.sabado) || fuera('festivo', p.festivo) || fuera('viaje', p.viaje)) { toast('Revisa los precios: cada extra entre 10 y 500 €'); return; }
+  if (fuera('minimo', c.minimo) || fuera('base', c.base) || fuera('umbral', c.umbral) || fuera('porPunto', c.porPunto)) { toast('Revisa la comisión: el € por punto debe estar entre 0,05 y 1 € (por ejemplo 0,192)'); return; }
+  const antP = NC.vigente(S.perfil.preciosHist, desde), antC = NC.vigente(S.perfil.comisionHist, desde);
+  const igualP = antP && ['sabado', 'festivo', 'viaje'].every(k => antP[k] === p[k]);
+  const igualC = antC && ['minimo', 'base', 'umbral', 'porPunto'].every(k => antC[k] === c[k]);
+  if (igualP && igualC) { toast('No has cambiado nada'); return; }
+  if (!igualP) S.perfil.preciosHist = S.perfil.preciosHist.filter(h => h.desde !== desde).concat([p]);
+  if (!igualC) S.perfil.comisionHist = S.perfil.comisionHist.filter(h => h.desde !== desde).concat([c]);
+  if (!save()) return;
+  pintaPrecios(); pintaMes();
+  toast(`Guardado desde ${NC.mesLabel(desde)}. Ejemplo: 8.000 puntos = ${eur(NC.comisionDe(8000, c))}`);
+  if (actual) verNomina(actual);
+};
+// Aviso de datos dañados o nóminas apartadas
+function pintaRescate() {
+  const el = $('rescate');
+  const nDesc = (S.descartadas || []).length;
+  if (bloqueado) {
+    el.hidden = false;
+    el.innerHTML = `<h2>Tus datos guardados están dañados</h2><p style="margin:0">No los he podido leer, así que los he apartado para no perderlos. Mientras no decidas, no guardo nada nuevo.</p>
+      <div class="row"><button class="btn" id="resCopiar">Copiar los datos dañados</button><button class="btn danger" id="resNuevo">Empezar de cero</button></div>
+      <p class="muted" style="margin:0">Si tienes una copia de seguridad, restáurala en Ajustes. Los datos dañados se quedan apartados en este navegador aunque empieces de cero.</p>`;
+    $('resCopiar').onclick = async () => { try { await navigator.clipboard.writeText(rawDanado); toast('Copiados. Guárdalos o envíamelos para recuperarlos'); } catch (e) { toast('No se han podido copiar'); } };
+    dosPasos($('resNuevo'), '¿Seguro? Empiezas sin datos', () => { bloqueado = false; if (!save()) { bloqueado = true; return; } pintaRescate(); toast('Empiezas de cero; lo dañado sigue apartado'); });
+  } else if (nDesc > (S.descartadasVistas || 0)) {
+    el.hidden = false;
+    el.innerHTML = `<h2>Hay ${nDesc} ${nDesc === 1 ? 'nómina guardada que no he podido leer' : 'nóminas guardadas que no he podido leer'}</h2><p style="margin:0">Las he apartado sin borrarlas. Vuelve a subir sus PDF para comprobarlas.</p><div class="row"><button class="btn" id="resOk">Entendido</button></div>`;
+    $('resOk').onclick = () => { S.descartadasVistas = nDesc; if (!save()) return; pintaRescate(); };
+  } else el.hidden = true;
+}
+function pintaCopia() { $('lastBk').textContent = S.ultimaCopia ? 'Última copia: ' + new Date(S.ultimaCopia).toLocaleDateString('es-ES') + '.' : 'Aún no has hecho ninguna copia.'; }
+function textoCopia() { const d = JSON.parse(JSON.stringify(S)); delete d.ultimaCopia; return JSON.stringify({ app: 'mi-nomina-al-centimo', v: 2, fecha: new Date().toISOString(), datos: d }); }
+$('bkCopy').onclick = async () => {
+  // Primero guardar (así, si otra pestaña tenía cambios, se cargan y entran en la copia)
+  const antes = S.ultimaCopia; S.ultimaCopia = Date.now();
+  if (!save()) { S.ultimaCopia = antes; toast('Había cambios en otra pestaña y los he cargado. Pulsa otra vez para copiar.'); return; }
+  const t = textoCopia(); pintaCopia();
+  try { await navigator.clipboard.writeText(t); toast('Copia copiada. Pégala en WhatsApp o en una nota'); }
+  catch (e) { const ta = $('bkText'); ta.hidden = false; ta.value = t; ta.select(); toast('Selecciona el texto y cópialo'); }
+};
+if (/github\.io$/.test(location.hostname)) {
+  $('bkFile').hidden = false;
+  $('bkFile').onclick = () => {
+    const antes = S.ultimaCopia; S.ultimaCopia = Date.now();
+    if (!save()) { S.ultimaCopia = antes; toast('Había cambios en otra pestaña y los he cargado. Pulsa otra vez para descargar.'); return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([textoCopia()], { type: 'application/json' }));
+    a.download = 'mi-nomina-copia-' + hoy() + '.json'; a.click(); pintaCopia();
+  };
+}
+let porRestaurar = null;
+function cuenta(x) { return `${Object.keys(x.historial).length} nóminas, ${x.extras.length} extras y ${Object.keys(x.comisiones).length} meses de comisión`; }
+function prepararRestaurar(txt) {
+  $('rsConf').hidden = true; porRestaurar = null;
+  let o;
+  try { o = JSON.parse(txt); } catch (e) { toast('Ese texto no es una copia de esta calculadora'); return; }
+  if (!o || o.app !== 'mi-nomina-al-centimo' || !o.datos) { toast('Ese texto no es una copia de esta calculadora'); return; }
+  if (o.v > 2) { toast('Esa copia es de una versión más nueva de la calculadora'); return; }
+  let nuevo;
+  try { nuevo = normalizar(o.datos); } catch (e) { toast('La copia está dañada'); return; }
+  porRestaurar = nuevo;
+  $('rsConfTxt').textContent = `La copia${o.fecha ? ' del ' + new Date(o.fecha).toLocaleDateString('es-ES') : ''} tiene ${cuenta(nuevo)}. Ahora tienes ${cuenta(S)}. Si sigues, se sustituye todo lo que tienes por la copia.`;
+  $('rsConf').hidden = false;
+}
+$('rsBtn').onclick = () => prepararRestaurar($('rsText').value.trim());
+$('rsFile').onchange = async (e) => { const f = e.target.files[0]; if (f) prepararRestaurar(await f.text()); e.target.value = ''; };
+$('rsNo').onclick = () => { porRestaurar = null; $('rsConf').hidden = true; };
+$('rsYes').onclick = () => {
+  if (!porRestaurar) return;
+  try { localStorage.setItem(KEY_ANTES, JSON.stringify(S)); } catch (e) {}
+  const ultima = S.ultimaCopia;
+  S = porRestaurar; S.ultimaCopia = ultima; S.rev = revGuardada(); porRestaurar = null; bloqueado = false;
+  enUndo = true; const ok = save(); enUndo = false;
+  if (ok) { $('rsConf').hidden = true; $('rsText').value = ''; undoListo = true; undoRev = S.rev; pintaUndo('deshacer'); todo(); toast('Datos restaurados'); }
+};
+function pintaUndo(modo) {
+  $('rsUndoRow').hidden = false;
+  $('rsUndoTxt').textContent = modo === 'deshacer' ? 'Puedes volver a lo que tenías antes de restaurar (solo hasta que cambies algo).' : 'Has vuelto a lo de antes. Puedes rehacer la restauración.';
+  $('rsUndo').textContent = modo === 'deshacer' ? 'Deshacer la restauración' : 'Rehacer la restauración';
+  delete $('rsUndo').dataset.armado;
+  dosPasos($('rsUndo'), `¿Seguro? Cambias ${cuenta(S)} por lo de antes`, () => {
+    if (revGuardada() !== undoRev) { caducaUndo('Ya no se puede deshacer: hubo cambios en otra pestaña'); return; }
+    let antes;
+    try { const raw = localStorage.getItem(KEY_ANTES); if (!raw) { toast('Ya no hay nada que deshacer'); $('rsUndoRow').hidden = true; return; } antes = normalizar(JSON.parse(raw)); } catch (e) { toast('No se ha podido deshacer'); return; }
+    try { localStorage.setItem(KEY_ANTES, JSON.stringify(S)); } catch (e) { toast('No se ha podido deshacer'); return; }
+    const ultima = S.ultimaCopia; S = antes; S.ultimaCopia = ultima; S.rev = revGuardada();
+    enUndo = true; const okU = save(); enUndo = false;
+    if (!okU) return;
+    undoRev = S.rev; todo(); pintaUndo(modo === 'deshacer' ? 'rehacer' : 'deshacer'); toast(modo === 'deshacer' ? 'Restauración deshecha' : 'Restauración rehecha');
+  });
+}
+$('wipe').onclick = () => { $('wipeConf').hidden = false; };
+$('wipeNo').onclick = () => { $('wipeConf').hidden = true; };
+$('wipeYes').onclick = () => { try { localStorage.removeItem(KEY); localStorage.removeItem(KEY_ANTES); } catch (e) {} location.reload(); };
+
+function todo() { pintaRescate(); pintaMes(); pintaFijos(); pintaPrecios(); pintaSubidas(); pintaGuardadas(); pintaCopia(); $('resultado').innerHTML = ''; $('errLect').hidden = true; actual = null; }
+todo();
+if (Object.keys(S.historial).length || S.extras.length) {
+  if (!S.ultimaCopia || Date.now() - S.ultimaCopia > 30 * 864e5) setTimeout(() => toast('Hace más de un mes que no haces copia de seguridad (Ajustes)'), 1200);
+}
+})();
+
+</script>
+
+</body>
+</html>
