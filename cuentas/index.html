@@ -493,13 +493,18 @@ function saldoCuenta(c){
 function quedaMes(){
   const d=new Date(),y=d.getFullYear(),m=d.getMonth();
   const bk=cfg.cuentas.find(c=>c.tipo==='dia');
-  const saldo=saldoCuenta(bk);
-  if(saldo===null)return null;
+  if(saldoCuenta(bk)===null)return null;
+  // Dinero para el mes: la cuenta de casa + las cuentas personales (de ahí se pasa a casa); el ahorro va aparte
+  const incl=cfg.cuentas.filter(c=>(c.tipo==='dia'||c.tipo==='personal')&&saldoCuenta(c)!==null);
+  const ids=new Set(incl.map(c=>c.id));
+  const partes=incl.map(c=>({nombre:c.nombre,saldo:saldoCuenta(c)}));
+  const saldo=r2(partes.reduce((a,x)=>a+x.saldo,0));
   const t=calc(deMes(y,m));
-  const pend=pendientesFijos(y,m,t).filter(f=>cuentaCat(f.cat)===bk.id);
+  const pend=pendientesFijos(y,m,t).filter(f=>ids.has(cuentaCat(f.cat)));
   // Recibos ya apuntados para más adelante este mes (aún no cobrados) + los que faltan por apuntar
   const pref0=y+'-'+pad(m+1),h0=hoy();
-  const futuros=movs.filter(x=>!x.borrado&&cuentaDe(x)===bk.id&&x.tipo==='gasto'&&String(x.fecha).startsWith(pref0)&&x.fecha>h0&&x.fecha>bk.fecha).reduce((a,x)=>a+x.importe,0);
+  const refF=id=>(incl.find(c=>c.id===id)||{}).fecha||'';
+  const futuros=movs.filter(x=>!x.borrado&&ids.has(cuentaDe(x))&&x.tipo==='gasto'&&!(x.categoria&&catById(x.categoria).grupo==='neutro')&&String(x.fecha).startsWith(pref0)&&x.fecha>h0&&x.fecha>refF(cuentaDe(x))).reduce((a,x)=>a+x.importe,0);
   const fijos=r2(futuros+pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0));
   const sinImporte=pend.filter(f=>!f.sugerido&&!f.porcentaje).map(f=>catById(f.cat).nombre);
   const queda=r2(saldo-fijos);
@@ -508,11 +513,11 @@ function quedaMes(){
   const total=gastado+Math.max(queda,0);
   const pref=y+'-'+pad(m+1);
   const delAhorro=r2(movs.filter(x=>!x.borrado&&cuentaDe(x)==='tr'&&x.tipo==='gasto'&&String(x.fecha).startsWith(pref)).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,saldo,fijos,sinImporte,queda,dias,delAhorro,porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:d.getDate()/fin};
+  return {cuenta:bk,partes,saldo,fijos,sinImporte,queda,dias,delAhorro,porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:d.getDate()/fin};
 }
 function tarjetaSaldo(compacta){
   const q=quedaMes();
-  if(!q)return '<section class="card small"><b>💶 ¿Cuánto os queda este mes?</b><br><span class="muted">Pon el saldo de Bankinter de hoy y la app lo llevará al día.</span><button class="btn sm ghost" style="margin-top:8px;display:block" onclick="ir(\'ajustes\')">Poner saldo</button></section>';
+  if(!q)return '<section class="card small"><b>💶 ¿Cuánto os queda este mes?</b><br><span class="muted">Pon el saldo de hoy de la cuenta de casa (y de la tuya) y la app lo llevará al día.</span><button class="btn sm ghost" style="margin-top:8px;display:block" onclick="ir(\'ajustes\')">Poner saldo</button></section>';
   const col=q.queda<0?'var(--neg)':q.consumo>q.ritmo+0.1?'var(--warn)':'var(--pos)';
   const aviso=q.queda<0?'No llega para los recibos que quedan: habría que tirar de otra cuenta.':q.consumo>q.ritmo+0.1?'Vais gastando más deprisa de lo que avanza el mes.':'Vais bien de ritmo.';
   const barra='<div class="bar" style="position:relative;height:10px"><i style="width:'+Math.min(100,q.consumo*100)+'%;background:'+col+'"></i><b title="Hoy" style="position:absolute;top:0;bottom:0;left:'+Math.min(100,q.ritmo*100)+'%;width:2px;background:var(--ink)"></b></div>';
@@ -522,14 +527,13 @@ function tarjetaSaldo(compacta){
   const linea=(a,b,extra)=>'<div class="bhead" style="padding:4px 0"><span>'+a+'</span><span'+(extra||'')+'>'+b+'</span></div>';
   return '<section class="card"><h2>💶 Lo que os queda este mes</h2>'+grande+barra
    +'<p class="small" style="margin:6px 0 10px;color:'+col+'">'+aviso+'</p>'
-   +linea('Saldo de '+esc(q.cuenta.nombre)+' ahora',eur(q.saldo))
+   +q.partes.map(x=>linea('Saldo de '+esc(x.nombre)+' ahora',eur(x.saldo))).join('')
    +linea('Recibos fijos que faltan por cobrar','− '+eur(q.fijos))
    +linea('<b>Para gastar hasta fin de mes</b>','<b>'+eur(q.queda)+'</b>')
    +(q.queda>0?linea('Al día ('+q.dias+' día'+(q.dias>1?'s':'')+')',eur(q.porDia)):'')
    +(q.sinImporte.length?'<p class="small muted">Sin importe todavía: '+q.sinImporte.map(esc).join(', ')+'. Cuando llegue la factura, apúntala.</p>':'')
    +(q.delAhorro>0?'<p class="small" style="margin-top:8px;color:var(--warn)"><b>⚠️ Sacado del ahorro este mes: '+eur(q.delAhorro)+'</b>. Es dinero que en principio no se toca.</p>':'')
    +(st!==null?'<p class="small muted" style="margin-top:8px">🏦 Ahorro en '+esc(tr.nombre)+': <b>'+eur(st)+'</b></p>':'')
-   +cfg.cuentas.filter(c=>c.tipo==='personal').map(c=>{const v=saldoCuenta(c);return v===null?'':'<p class="small muted" style="margin-top:4px">👤 '+esc(c.nombre)+': <b>'+eur(v)+'</b></p>'}).join('')
    +'<p class="small muted">Saldo puesto el '+fechaCorta(q.cuenta.fecha)+'. <a href="#" onclick="ir(\'ajustes\');return false">Actualizar</a></p></section>';
 }
 function ponerSaldo(id){
