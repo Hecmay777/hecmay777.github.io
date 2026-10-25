@@ -118,7 +118,7 @@
   .quincenas div { background: var(--campo); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
   .quincenas strong { display: block; font-size: 17px; }
   .acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .ajustes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .ajustes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
   details summary { cursor: pointer; font-weight: 700; font-size: 17px; }
   .confirmar { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--aviso-fondo); color: var(--aviso); font-size: 14px; display: grid; gap: 8px; }
   .confirmar div { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -144,9 +144,9 @@
 
   <section class="panel resultado" aria-live="polite">
     <p class="etiqueta">Comisión del mes</p>
-    <p class="grande num" id="comision">408,00 €</p>
+    <p class="grande num" id="comision">408,24 €</p>
     <div class="linea"><span>Puntos totales</span><span class="num" id="total">0,00</span></div>
-    <div class="linea"><span>Parte fija (hasta <span id="umbral-txt">6.300</span> pts)</span><span class="num" id="fija">408,00 €</span></div>
+    <div class="linea"><span id="fija-txt">Mínimo (hasta <span id="umbral-txt">6.300</span> pts)</span><span class="num" id="fija">408,24 €</span></div>
     <div class="linea"><span>Puntos de más × <span id="tarifa-txt">0,192</span> €</span><span class="num" id="extra">0,00 €</span></div>
     <div class="barra" aria-hidden="true"><div id="barra"></div></div>
     <p class="estado bajo" id="estado">Te faltan 6.300,00 puntos para empezar a sumar.</p>
@@ -198,9 +198,12 @@
       <summary>Ajustes de la fórmula</summary>
       <p class="ayuda" style="margin-top:8px">Cámbialos solo si la empresa cambia las condiciones.</p>
       <div class="ajustes">
-        <label for="a-base">Fijo (€)<input type="text" id="a-base" inputmode="decimal"></label>
+        <label for="a-minimo">Mínimo (€)<input type="text" id="a-minimo" inputmode="decimal"></label>
         <label for="a-umbral">Hasta (puntos)<input type="text" id="a-umbral" inputmode="decimal"></label>
+        <label for="a-base">Por encima: base (€)<input type="text" id="a-base" inputmode="decimal"></label>
         <label for="a-tarifa">€ por punto de más<input type="text" id="a-tarifa" inputmode="decimal"></label>
+      </div>
+      <p class="ayuda" style="margin-top:8px">Hasta el límite de puntos cobras el mínimo. Por encima: base + cada punto de más × la tarifa.
       </div>
     </details>
   </section>
@@ -208,13 +211,21 @@
 </main>
 
 <script>
-  const POR_DEFECTO = { base: 408, umbral: 6300, tarifa: 0.192 };
+  // Hasta 6.300 puntos se cobra el mínimo (408,24 € según las nóminas desde mayo de 2026).
+  // Por encima: 408 € + 0,192 € por cada punto de más (nunca menos que el mínimo).
+  const POR_DEFECTO = { minimo: 408.24, base: 408, umbral: 6300, tarifa: 0.192 };
   const CLAVE = "comisiones-reparto-v1";
 
   // Cálculo: fijo hasta el umbral, y cada punto de más se paga a la tarifa
+  // Se calcula en céntimos y se redondea como en la nómina
   function calcular(puntos, f) {
     const extraPts = Math.max(0, puntos - f.umbral);
-    return { extraPts, extra: extraPts * f.tarifa, total: f.base + extraPts * f.tarifa };
+    const minimo = f.minimo != null ? f.minimo : f.base;
+    if (extraPts <= 0) return { extraPts: 0, extra: 0, fijo: minimo, total: minimo, enMinimo: true };
+    const extra = Math.round(extraPts * f.tarifa * 100) / 100;
+    const total = Math.round((f.base + extra) * 100) / 100;
+    if (total < minimo) return { extraPts, extra, fijo: minimo, total: minimo, enMinimo: true };
+    return { extraPts, extra, fijo: f.base, total, enMinimo: false };
   }
 
   // Acepta "7.854,17", "7854,17" o "7854.17"
@@ -234,7 +245,12 @@
   let estado = { hojas: [], formula: { ...POR_DEFECTO } };
   try {
     const guardado = JSON.parse(localStorage.getItem(CLAVE));
-    if (guardado && Array.isArray(guardado.hojas)) estado = { hojas: guardado.hojas, formula: { ...POR_DEFECTO, ...guardado.formula } };
+    if (guardado && Array.isArray(guardado.hojas)) {
+      const g = guardado.formula || {};
+      // Fórmula guardada antes de existir el mínimo: el mínimo nuevo es 408,24 €, salvo que hubieras cambiado el fijo a mano
+      if (g.minimo == null && g.base != null && g.base !== 408) g.minimo = g.base;
+      estado = { hojas: guardado.hojas, formula: { ...POR_DEFECTO, ...g } };
+    }
   } catch {}
   function guardar() { try { localStorage.setItem(CLAVE, JSON.stringify(estado)); } catch {} }
 
@@ -248,7 +264,8 @@
 
     $("comision").textContent = eur(r.total);
     $("total").textContent = pts(total);
-    $("fija").textContent = eur(f.base);
+    $("fija").textContent = eur(r.fijo);
+    $("fija-txt").firstChild.textContent = r.enMinimo ? "Mínimo (hasta " : "Base (por encima de ";
     $("extra").textContent = eur(r.extra);
     $("umbral-txt").textContent = f.umbral.toLocaleString("es-ES");
     $("tarifa-txt").textContent = f.tarifa.toLocaleString("es-ES", { maximumFractionDigits: 4 });
@@ -324,7 +341,7 @@
   $("b-no").addEventListener("click", () => { $("confirmar").hidden = true; });
   $("b-si").addEventListener("click", () => { estado.hojas = []; guardar(); $("confirmar").hidden = true; pintar(); });
 
-  [["a-base", "base"], ["a-umbral", "umbral"], ["a-tarifa", "tarifa"]].forEach(([id, k]) => {
+  [["a-minimo", "minimo"], ["a-base", "base"], ["a-umbral", "umbral"], ["a-tarifa", "tarifa"]].forEach(([id, k]) => {
     const el = $(id);
     el.value = String(estado.formula[k]).replace(".", ",");
     el.addEventListener("input", () => {
