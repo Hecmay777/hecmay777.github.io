@@ -240,6 +240,7 @@ function defaultCfg(){
       {id:uid(),nombre:'Parking',importe:null,cat:'parking'}
     ],
     cuentas:[{id:'bankinter',nombre:'Bankinter casa (Irene)',tipo:'dia',saldo:null,fecha:'',ts:0,iban4:'4755'},{id:'bankinter_h',nombre:'Bankinter Héctor',tipo:'personal',saldo:null,fecha:'',ts:0,iban4:'2084'},{id:'tr',nombre:'Trade Republic',tipo:'ahorro',saldo:null,fecha:'',ts:0}],
+    nominaSig:{dia:20},
     personas:['Héctor','Irene'],
     modificado:0
   };
@@ -257,6 +258,7 @@ function asegurarCats(c){
     const pos=prev?c.cats.findIndex(x=>x.id===prev.id)+1:c.cats.length;
     c.cats.splice(pos,0,d);cambio=true;
   });
+  if(!c.nominaSig){c.nominaSig={dia:20};cambio=true}
   if(!Array.isArray(c.cuentas))c.cuentas=[];
   defaultCfg().cuentas.forEach((d,i)=>{if(!c.cuentas.some(x=>x.id===d.id)){c.cuentas.splice(Math.min(i,c.cuentas.length),0,d);cambio=true}});
   const bk=c.cuentas.find(x=>x.id==='bankinter');if(bk&&bk.nombre==='Bankinter'){bk.nombre='Bankinter casa (Irene)';cambio=true}
@@ -290,8 +292,15 @@ function nuevoMov(d){
 function addMov(d){const m=nuevoMov(d);movs.push(m);saveMovs();programarSync();return m}
 function updMov(id,ch){const m=movs.find(x=>x.id===id);if(!m)return;Object.assign(m,ch,{modificado:Date.now(),pend:true});saveMovs();programarSync()}
 
-const deMes=(y,m)=>{const p=y+'-'+pad(m+1);return movs.filter(x=>!x.borrado&&String(x.fecha).startsWith(p))};
-const deAno=y=>movs.filter(x=>!x.borrado&&String(x.fecha).startsWith(y+'-'));
+/* Mes en el que cuenta un apunte: las nóminas cobradas a final de mes cuentan para el mes siguiente */
+const esNomina=m=>m.tipo==='ingreso'&&/^nomina/.test(String(m.categoria||''));
+function mesCont(m){
+  const f=String(m.fecha),dia=Number((cfg.nominaSig||{}).dia)||0;
+  if(dia&&esNomina(m)&&Number(f.slice(8,10))>=dia){const y=+f.slice(0,4),mm=+f.slice(5,7);return mm===12?(y+1)+'-01':y+'-'+pad(mm+1)}
+  return f.slice(0,7);
+}
+const deMes=(y,m)=>{const p=y+'-'+pad(m+1);return movs.filter(x=>!x.borrado&&mesCont(x)===p)};
+const deAno=y=>movs.filter(x=>!x.borrado&&mesCont(x).startsWith(y+'-'));
 
 /* Cálculo: gastos positivos = dinero que sale; una devolución resta del gasto */
 function calc(list){
@@ -356,7 +365,8 @@ function mover(d){
 function signo(m){const c=catById(m.categoria);if(c.grupo==='neutro')return ['','neu'];const entra=c.grupo==='ingreso'?m.tipo==='ingreso':m.tipo!=='gasto';return entra?['+','pos']:['−','neg']}
 function itemMov(m){
   const c=catById(m.categoria);const [s,cls]=signo(m);
-  const det=[m.nota,fechaCorta(m.fecha),m.quien,m.origen&&m.origen!=='manual'?m.origen:''].filter(Boolean).map(esc).join(' · ');
+  const mc=mesCont(m),otroMes=mc!==String(m.fecha).slice(0,7)?'cuenta para '+MESES[+mc.slice(5,7)-1].toLowerCase():'';
+  const det=[m.nota,fechaCorta(m.fecha),otroMes,m.quien,m.origen&&m.origen!=='manual'?m.origen:''].filter(Boolean).map(esc).join(' · ');
   return '<button class="mov" onclick="editar(\''+m.id+'\')"><span class="ic">'+c.icono+'</span><span class="mt"><b>'+esc(c.nombre)+(m.sub?' · '+esc(m.sub):'')+'</b><small>'+det+'</small></span><span class="amt '+cls+'">'+s+eur(m.importe)+'</span></button>';
 }
 function catOptions(sel,conVacio){
@@ -897,6 +907,7 @@ function vAjustes(){
   const grupoCats=(g,t)=>'<h3>'+t+'</h3>'+cfg.cats.filter(c=>c.grupo===g).map(c=>'<div class="crow"><input class="ico" value="'+esc(c.icono)+'" onchange="setCat(\''+c.id+'\',\'icono\',this.value)"><input value="'+esc(c.nombre)+'" onchange="setCat(\''+c.id+'\',\'nombre\',this.value)">'+(g==='variable'?'<input inputmode="decimal" placeholder="Sin límite" value="'+(c.presupuesto?String(c.presupuesto).replace('.',','):'')+'" onchange="setCat(\''+c.id+'\',\'presupuesto\',parseNum(this.value))">':'<span></span>')+'<label><input type="checkbox"'+(c.oculta?'':' checked')+' onchange="setCat(\''+c.id+'\',\'oculta\',!this.checked)">Ver</label></div>').join('');
   const mesOpts=sel=>'<option value="0">Cada mes</option>'+MESES.map((m,i)=>'<option value="'+(i+1)+'"'+(sel===i+1?' selected':'')+'>Solo '+m.toLowerCase()+'</option>').join('');
   return '<section class="card"><h2>¿Quién usa este móvil?</h2><div class="seg">'+cfg.personas.map(p=>'<button class="'+(yo===p?'on':'')+'" onclick="setYo(\''+esc(p)+'\')">'+esc(p)+'</button>').join('')+'</div><p class="muted small">Los apuntes se marcan con este nombre.</p></section>'
+  +'<section class="card"><h2>💼 Nóminas</h2><p class="muted small" style="margin-top:-4px">Las nóminas que entran a partir de este día cuentan para el mes siguiente (con ellas vivís el mes que empieza). Pon 0 para desactivarlo.</p><label>A partir del día<input type="number" min="0" max="31" inputmode="numeric" value="'+(Number((cfg.nominaSig||{}).dia)||0)+'" onchange="cfg.nominaSig={dia:Math.max(0,Math.min(31,parseInt(this.value)||0))};saveCfg();render()"></label></section>'
   +'<section class="card"><h2>💶 Saldo de las cuentas</h2><p class="muted small" style="margin-top:-4px">Escribe el saldo que ves hoy en el banco. Desde ahí la app suma los ingresos y resta los gastos. Al importar un extracto con columna de saldo se corrige solo.</p>'
    +cfg.cuentas.map(c=>{const s=saldoCuenta(c);return '<h3>'+esc(c.nombre)+({dia:' · día a día',personal:' · personal',ahorro:' · ahorro'}[c.tipo]||'')+'</h3>'+(s!==null?'<p class="small" style="margin:0 0 6px">Ahora: <b>'+eur(s)+'</b> <span class="muted">(puesto el '+fechaCorta(c.fecha)+')</span></p>':'<p class="small muted" style="margin:0 0 6px">Sin saldo todavía.</p>')+'<div class="row2"><input id="sal_'+c.id+'" inputmode="decimal" placeholder="Saldo de hoy"><button class="btn sm" style="margin:4px 0 0" onclick="ponerSaldo(\''+c.id+'\')">Guardar saldo</button></div>'}).join('')+'</section>'
 
