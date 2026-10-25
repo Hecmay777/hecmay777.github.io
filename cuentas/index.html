@@ -88,6 +88,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:14px
 .crow{display:grid;grid-template-columns:46px 1fr 92px 50px;gap:6px;align-items:center;margin-top:6px}
 .crow input{margin:0;padding:8px}.crow .ico{text-align:center;padding:8px 2px}.crow label{margin:0;display:flex;gap:4px;align-items:center;font-size:12px}
 .frow{display:grid;grid-template-columns:1fr 92px 100px 36px;gap:6px;align-items:center;margin-top:6px;font-size:14px}
+.frow5{display:grid;grid-template-columns:1fr 84px 52px 92px 32px;gap:6px;align-items:center;margin-top:6px;font-size:14px}.frow5 input,.frow5 select{margin:0;padding:8px}
 .frow input,.frow select{margin:0;padding:8px}
 .x{border:0;background:transparent;color:var(--muted);font-size:18px;cursor:pointer}
 .tbl{overflow-x:auto}.tbl table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
@@ -164,6 +165,18 @@ function parseFecha(v){
 }
 
 /* ===================== datos iniciales (sacados de tu Excel) ===================== */
+/* Recibos fijos: se apuntan solos el día de cobro. auto:'ultimo' = importe del último recibo visto en el banco */
+function FIJOS_V2(){return [
+  {id:uid(),cat:'alquiler',importe:728.92,mes:0,dia:1},
+  {id:uid(),cat:'pension',importe:300,mes:0,dia:1},
+  {id:uid(),cat:'luz',importe:null,mes:0,dia:3,auto:'ultimo'},
+  {id:uid(),cat:'mutua',importe:null,mes:0,dia:3,auto:'ultimo'},
+  {id:uid(),cat:'gimnasio',importe:65,mes:0,dia:5},
+  {id:uid(),cat:'compassion',importe:30,mes:0,dia:6},
+  {id:uid(),cat:'diezmo',porcentaje:10,mes:0,dia:6},
+  {id:uid(),cat:'vodafone',importe:65.64,mes:0,dia:22}
+]}
+const REGLAS_FIJOS=[['GABRIEL SALAS','alquiler'],['RHEMA','diezmo'],['ENERGIA XXI','luz'],['AXA SEGUROS','mutua'],['FIT FORCE','gimnasio'],['MANUELA CERDAN','pension']];
 function defaultCfg(){
   const C=(id,nombre,icono,grupo,extra)=>Object.assign({id,nombre,icono,grupo,presupuesto:0,oculta:false},extra||{});
   const R=(texto,cat)=>({texto,cat});
@@ -188,10 +201,10 @@ function defaultCfg(){
       C('diezmo','Diezmo','⛪','fijo'),
       C('ofrendas','Ofrendas','🙏','fijo'),
       C('vodafone','Vodafone','📱','fijo'),
-      C('mutua','Agrupació Mutua','🩺','fijo'),
+      C('mutua','Seguro de salud (AXA)','🩺','fijo'),
       C('compassion','Compassion','🤝','fijo'),
-      C('luz','Luz','💡','fijo'),
-      C('gas','Gas','🔥','fijo'),
+      C('luz','Luz y gas','💡','fijo'),
+      C('gas','Gas','🔥','fijo',{oculta:true}),
       C('gimnasio','Gimnasio','🏋️','fijo'),
       C('pension','Pensión alimenticia','👧','fijo'),
       C('seguro_coche','Seguro coche','🚗','fijo'),
@@ -207,17 +220,8 @@ function defaultCfg(){
       C('pago_tarjeta','Pago de la tarjeta','💳','neutro'),
       C('inversion','Inversión / ahorro','📈','neutro')
     ],
-    fijos:[
-      {id:uid(),cat:'alquiler',importe:709.11,mes:0},
-      {id:uid(),cat:'vodafone',importe:65.64,mes:0},
-      {id:uid(),cat:'mutua',importe:212.93,mes:0},
-      {id:uid(),cat:'compassion',importe:30,mes:0},
-      {id:uid(),cat:'gimnasio',importe:65,mes:0},
-      {id:uid(),cat:'pension',importe:300,mes:0},
-      {id:uid(),cat:'luz',importe:null,mes:0},
-      {id:uid(),cat:'gas',importe:null,mes:0},
-      {id:uid(),cat:'diezmo',porcentaje:10,mes:0}
-    ],
+    fijos:FIJOS_V2(),
+    fijosV:2,
     reglas:[
       R('MERCADONA','super'),R('LIDL','super'),R('ALDI','super'),R('EROSKI','super'),R('CARREFOUR','super'),R('CONSUM','super'),R('SUPERMERCADO','super'),R('HIPERCENTRO','super'),
       R('AMAZON','amazon'),R('AMZN','amazon'),
@@ -259,6 +263,13 @@ function asegurarCats(c){
     c.cats.splice(pos,0,d);cambio=true;
   });
   if(!c.nominaSig){c.nominaSig={dia:20};cambio=true}
+  if((Number(c.fijosV)||0)<2){
+    c.fijos=FIJOS_V2();c.fijosV=2;cambio=true;
+    const ren={mutua:['Agrupació Mutua','Seguro de salud (AXA)'],luz:['Luz','Luz y gas']};
+    c.cats.forEach(x=>{if(ren[x.id]&&x.nombre===ren[x.id][0])x.nombre=ren[x.id][1];if(x.id==='gas')x.oculta=true});
+    if(!Array.isArray(c.reglas))c.reglas=[];
+    REGLAS_FIJOS.forEach(([t,cat])=>{if(!c.reglas.some(r=>norm(r.texto)===t))c.reglas.unshift({texto:t,cat})});
+  }
   if(!Array.isArray(c.cuentas))c.cuentas=[];
   defaultCfg().cuentas.forEach((d,i)=>{if(!c.cuentas.some(x=>x.id===d.id)){c.cuentas.splice(Math.min(i,c.cuentas.length),0,d);cambio=true}});
   const bk=c.cuentas.find(x=>x.id==='bankinter');if(bk&&bk.nombre==='Bankinter'){bk.nombre='Bankinter casa (Irene)';cambio=true}
@@ -317,6 +328,7 @@ function calc(list){
 /* ===================== navegación y render ===================== */
 function ir(v){vista=v;render();window.scrollTo(0,0)}
 function render(sinGuardarForm){
+  try{generarFijos()}catch(e){}
   if(!sinGuardarForm&&vista==='apuntar'&&$('#fImp'))leerForm();
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===vista));
   const f={apuntar:vApuntar,movs:vMovs,resumen:vResumen,importar:vImportar,ajustes:vAjustes}[vista];
@@ -431,7 +443,8 @@ function editar(id){
 }
 function guardarEdicion(id){
   const v=parseNum($('#eImp').value);if(!v){toast('Importe no válido');return}
-  updMov(id,{importe:r2(Math.abs(v)),tipo:$('#eTipo').value,categoria:$('#eCat').value,sub:$('#eSub').value,fecha:$('#eFecha').value||hoy(),quien:$('#eQuien').value,nota:$('#eNota').value});
+  const ant=movs.find(x=>x.id===id);let nota=$('#eNota').value;if(ant&&Math.abs(ant.importe-r2(Math.abs(v)))>=0.01)nota=nota.replace(AUTO,'');
+  updMov(id,{importe:r2(Math.abs(v)),tipo:$('#eTipo').value,categoria:$('#eCat').value,sub:$('#eSub').value,fecha:$('#eFecha').value||hoy(),quien:$('#eQuien').value,nota});
   cerrar();render(true);toast('Cambios guardados');
 }
 function borrar(id){updMov(id,{borrado:true});cerrar();render(true);toast('Movido a la papelera',()=>{updMov(id,{borrado:false});render(true)})}
@@ -472,6 +485,7 @@ function saldoCuenta(c){
     if(m.borrado||cuentaDe(m)!==c.id)return;
     const f=String(m.fecha);
     const ts=Number(c.ts)||0;
+    if(f>hoy())return;
     if(f>c.fecha||(ts&&(Number(m.creado)||0)>ts&&f>=ymd(new Date(ts))))s+=m.tipo==='ingreso'?m.importe:-m.importe;
   });
   return r2(s);
@@ -483,7 +497,10 @@ function quedaMes(){
   if(saldo===null)return null;
   const t=calc(deMes(y,m));
   const pend=pendientesFijos(y,m,t).filter(f=>cuentaCat(f.cat)===bk.id);
-  const fijos=r2(pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0));
+  // Recibos ya apuntados para más adelante este mes (aún no cobrados) + los que faltan por apuntar
+  const pref0=y+'-'+pad(m+1),h0=hoy();
+  const futuros=movs.filter(x=>!x.borrado&&cuentaDe(x)===bk.id&&x.tipo==='gasto'&&String(x.fecha).startsWith(pref0)&&x.fecha>h0&&x.fecha>bk.fecha).reduce((a,x)=>a+x.importe,0);
+  const fijos=r2(futuros+pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0));
   const sinImporte=pend.filter(f=>!f.sugerido&&!f.porcentaje).map(f=>catById(f.cat).nombre);
   const queda=r2(saldo-fijos);
   const fin=new Date(y,m+1,0).getDate(),dias=fin-d.getDate()+1;
@@ -566,6 +583,34 @@ function resumenMes(){
   if(ings.length)h+='<section class="card"><h2>Ingresos</h2>'+ings.map(c=>'<div class="bline"><div class="bhead"><span>'+c.icono+' '+esc(c.nombre)+'</span><span class="pos">'+eur(t.cat[c.id])+'</span></div></div>').join('')+'</section>';
   if(Math.abs(t.neutro)>0.005)h+='<p class="muted small">🔁 Movimientos entre cuentas / inversión este mes (no cuentan): '+eur(Math.abs(t.neutro))+'</p>';
   return h;
+}
+/* Apunta solos los recibos fijos del mes en curso (mismo identificador en los dos móviles, así no se duplican) */
+const AUTO=' (automático)';
+function ultimoImporteBanco(cat,antesDe){
+  const delBanco=movs.filter(x=>!x.borrado&&x.categoria===cat&&x.importKey&&!/^(gmail|pend)\|/.test(x.importKey)&&String(x.fecha).slice(0,7)<antesDe);
+  if(!delBanco.length)return null;
+  const ult=delBanco.reduce((a,x)=>String(x.fecha).slice(0,7)>a?String(x.fecha).slice(0,7):a,'');
+  return r2(delBanco.filter(x=>String(x.fecha).startsWith(ult)).reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0));
+}
+function generarFijos(){
+  const d=new Date(),y=d.getFullYear(),m=d.getMonth(),ym=y+'-'+pad(m+1),fin=new Date(y,m+1,0).getDate();
+  let cambio=false;
+  (cfg.fijos||[]).forEach(f=>{
+    if(!f.dia||(f.mes&&f.mes!==m+1))return;
+    const id='fx_'+f.cat+'_'+ym;
+    const ex=movs.find(x=>x.id===id);
+    const ingresos=()=>calc(deMes(y,m)).ingreso;
+    if(ex){ // el diezmo se recalcula mientras nadie lo haya cambiado a mano
+      if(f.porcentaje&&!ex.borrado&&String(ex.nota).endsWith(AUTO)){const v=r2(ingresos()*f.porcentaje/100);if(v>0&&Math.abs(v-ex.importe)>=0.01){Object.assign(ex,{importe:v,modificado:Date.now(),pend:true});cambio=true}}
+      return;
+    }
+    if(movs.some(x=>!x.borrado&&x.categoria===f.cat&&String(x.fecha).startsWith(ym)))return; // ya está (banco o a mano)
+    let imp=f.porcentaje?r2(ingresos()*f.porcentaje/100):(f.auto==='ultimo'?(ultimoImporteBanco(f.cat,ym)??f.importe):f.importe);
+    if(!imp||imp<=0)return;
+    const mv=nuevoMov({fecha:ym+'-'+pad(Math.min(f.dia,fin)),tipo:'gasto',importe:imp,categoria:f.cat,nota:(f.porcentaje?'Diezmo '+f.porcentaje+' %':'Recibo fijo')+AUTO,quien:yo,origen:'fijo'});
+    mv.id=id;movs.push(mv);cambio=true;
+  });
+  if(cambio){saveMovs();programarSync()}
 }
 function apuntarFijo(fid){
   const f=cfg.fijos.find(x=>x.id===fid);if(!f)return;
@@ -823,7 +868,10 @@ function construirFilas(){
     const ya=movs.some(m=>!m.borrado&&m.importKey===key);
     const dup=ya?null:buscarDup(f,Math.abs(r2(v)),tipo,usados);
     if(dup)usados.add(dup.id);
-    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con)||(imp.banco==='Trade Republic'?(/TRANSFER/i.test(con)?'traspaso':/INTER[EÉ]S|INTEREST/i.test(con)?'otros_ing':''):''),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,n,pend:esPend,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
+    const catS=sugerir(con);
+    const est=(!ya&&!dup&&catS)?movs.find(x=>!x.borrado&&x.origen==='fijo'&&String(x.nota).endsWith(AUTO)&&x.tipo===tipo&&x.categoria===catS&&!usados.has(x.id)&&Math.abs(new Date(x.fecha)-new Date(f))<=21*864e5):null;
+    if(est)usados.add(est.id);
+    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con)||(imp.banco==='Trade Republic'?(/TRANSFER/i.test(con)?'traspaso':/INTER[EÉ]S|INTEREST/i.test(con)?'otros_ing':''):''),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,reemplaza:est?est.id:'',estTxt:est?eur(est.importe):'',n,pend:esPend,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
   });
   imp.filas=out.sort((a,b)=>a.fecha.localeCompare(b.fecha));
 }
@@ -851,7 +899,7 @@ function vImportar(){
 function filasHTML(){
   return imp.filas.map((f,i)=>{
     const [s,cls]=f.tipo==='gasto'?['−','neg']:['+','pos'];
-    const badge=(f.pend?'<span class="badge">Pendiente</span> ':'')+(f.estado==='dup'?'<span class="badge w">¿Repetido? Ya tienes: '+esc(f.dupTxt)+'</span>':f.estado==='ya'?'<span class="badge">Ya importado</span>':'');
+    const badge=(f.pend?'<span class="badge">Pendiente</span> ':'')+(f.reemplaza&&f.ok?'<span class="badge">Sustituye la estimación de '+esc(f.estTxt)+'</span> ':'')+(f.estado==='dup'?'<span class="badge w">¿Repetido? Ya tienes: '+esc(f.dupTxt)+'</span>':f.estado==='ya'?'<span class="badge">Ya importado</span>':'');
     return '<div class="irow'+(f.ok?'':' off')+(f.ok&&!f.cat?' need':'')+'" id="ir'+i+'"><input type="checkbox"'+(f.ok?' checked':'')+' onchange="imp.filas['+i+'].ok=this.checked;$(\'#ifilas\').innerHTML=filasHTML()"><div class="imain"><b>'+esc(f.concepto||'(sin concepto)')+'</b><small class="muted">'+fechaCorta(f.fecha)+'</small> '+badge+'<select onchange="cambiarCatImp('+i+',this.value)">'+catOptions(f.cat,true)+'</select></div><span class="amt '+cls+'">'+s+eur(f.importe)+'</span></div>';
   }).join('');
 }
@@ -889,6 +937,7 @@ function importarSeleccion(){
   const sel=imp.filas.filter(f=>f.ok);
   const se=saldoDelExtracto();
   if(!sel.length&&!se){toast('No hay nada seleccionado');return}
+  sel.forEach(f=>{if(f.reemplaza){const e=movs.find(x=>x.id===f.reemplaza);if(e)Object.assign(e,{borrado:true,modificado:Date.now(),pend:true})}});
   sel.forEach(f=>movs.push(nuevoMov({fecha:f.fecha,tipo:f.tipo,importe:f.importe,categoria:f.cat||(f.tipo==='gasto'?'extras':'otros_ing'),nota:f.concepto,quien:yo,origen:imp.banco,importKey:f.key})));
   let msg=sel.length+' movimientos importados';
   if(se){
@@ -921,8 +970,8 @@ function vAjustes(){
    +grupoCats('variable','Día a día (icono · nombre · límite/mes)')+grupoCats('fijo','Recibos fijos')+grupoCats('ingreso','Ingresos')+grupoCats('neutro','No cuentan')
    +'<h3>Añadir categoría</h3><div class="row2"><input id="nIco" placeholder="Icono 🙂" maxlength="4"><input id="nNom" placeholder="Nombre"></div><select id="nGru"><option value="variable">Día a día</option><option value="fijo">Recibo fijo</option><option value="ingreso">Ingreso</option><option value="neutro">No cuenta</option></select><button class="btn ghost" onclick="nuevaCat()">Añadir</button></section>'
 
-  +'<section class="card"><h2>Recibos fijos de cada mes</h2><p class="muted small" style="margin-top:-4px">Aparecen en Resumen para confirmarlos con un toque. Deja el importe vacío si cambia cada mes.</p>'
-   +cfg.fijos.map((f,i)=>'<div class="frow"><span>'+catById(f.cat).icono+' '+esc(catById(f.cat).nombre)+'</span>'+(f.porcentaje?'<span class="small muted">'+f.porcentaje+' % ingr.</span>':'<input inputmode="decimal" placeholder="Variable" value="'+(f.importe?String(f.importe).replace('.',','):'')+'" onchange="cfg.fijos['+i+'].importe=parseNum(this.value)||null;saveCfg()">')+'<select onchange="cfg.fijos['+i+'].mes=+this.value;saveCfg()">'+mesOpts(f.mes)+'</select><button class="x" onclick="cfg.fijos.splice('+i+',1);saveCfg();render()">✕</button></div>').join('')
+  +'<section class="card"><h2>Recibos fijos de cada mes</h2><p class="muted small" style="margin-top:-4px">Se apuntan solos cada mes el día de cobro. Si un mes cambia, tocad el apunte y corregid el importe; si no toca, mandadlo a la papelera. Sin día, solo sale como recordatorio en Resumen. «Último recibo» = el importe del último cargo del banco.</p>'
+   +cfg.fijos.map((f,i)=>'<div class="frow5"><span>'+catById(f.cat).icono+' '+esc(catById(f.cat).nombre)+'</span>'+(f.porcentaje?'<span class="small muted">'+f.porcentaje+' % ingr.</span>':(f.auto==='ultimo'?'<span class="small muted">Último recibo</span>':'<input inputmode="decimal" placeholder="Variable" value="'+(f.importe?String(f.importe).replace('.',','):'')+'" onchange="cfg.fijos['+i+'].importe=parseNum(this.value)||null;saveCfg()">'))+'<input type="number" min="0" max="31" inputmode="numeric" title="Día de cobro" placeholder="Día" value="'+(f.dia||'')+'" onchange="cfg.fijos['+i+'].dia=Math.max(0,Math.min(31,parseInt(this.value)||0));saveCfg()">'+'<select onchange="cfg.fijos['+i+'].mes=+this.value;saveCfg()">'+mesOpts(f.mes)+'</select><button class="x" onclick="cfg.fijos.splice('+i+',1);saveCfg();render()">✕</button></div>').join('')
    +'<h3>Añadir recibo</h3><div class="row2"><select id="fCat">'+cfg.cats.filter(c=>c.grupo==='fijo').map(c=>'<option value="'+c.id+'">'+c.icono+' '+esc(c.nombre)+'</option>').join('')+'</select><input id="fImpN" inputmode="decimal" placeholder="Importe"></div><button class="btn ghost" onclick="nuevoFijo()">Añadir</button></section>'
 
   +'<section class="card"><h2>Botones rápidos</h2><p class="muted small" style="margin-top:-4px">Con importe se guardan con un solo toque. Sin importe, solo eligen la categoría.</p>'
@@ -940,7 +989,7 @@ function vAjustes(){
 function setYo(p){yo=p;store.set('cc_yo',p);form.quien='';render()}
 function setCat(id,k,v){const c=cfg.cats.find(x=>x.id===id);if(!c)return;c[k]=v;saveCfg()}
 function nuevaCat(){const nom=$('#nNom').value.trim();if(!nom){toast('Escribe el nombre');return}cfg.cats.push({id:'c_'+uid().slice(0,8),nombre:nom,icono:$('#nIco').value.trim()||'🏷️',grupo:$('#nGru').value,presupuesto:0,oculta:false});saveCfg();render();toast('Categoría añadida')}
-function nuevoFijo(){cfg.fijos.push({id:uid(),cat:$('#fCat').value,importe:parseNum($('#fImpN').value)||null,mes:0});saveCfg();render()}
+function nuevoFijo(){cfg.fijos.push({id:uid(),cat:$('#fCat').value,importe:parseNum($('#fImpN').value)||null,mes:0,dia:1});saveCfg();render()}
 function nuevoAtajo(){const nom=$('#aNom').value.trim();if(!nom){toast('Escribe el nombre');return}cfg.atajos.push({id:uid(),nombre:nom,importe:parseNum($('#aImp').value)||null,cat:$('#aCat').value});saveCfg();render()}
 function nuevaRegla(){const t=$('#rTxt').value.trim();if(!t)return;cfg.reglas.unshift({texto:norm(t),cat:$('#rCat').value});saveCfg();render()}
 
