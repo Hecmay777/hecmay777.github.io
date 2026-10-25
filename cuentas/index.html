@@ -695,6 +695,12 @@ async function leerArchivo(f){
     }
   }catch(e){toast('No he podido leer el archivo');return}
   rows=rows.filter(r=>Array.isArray(r));
+  const tc=trCSV(rows);
+  if(tc){
+    imp.banco='Trade Republic';imp.raw=tc;imp.nombre=f.name;imp.pdfFin=null;imp.map=detectar(imp.raw);construirFilas();render();
+    toast('Trade Republic: '+(tc.length-1)+' movimientos (intereses ya sin la retención)');
+    return;
+  }
   const bx=bankinterExcel(rows);
   if(bx){
     const c=cfg.cuentas.find(x=>x.iban4&&x.iban4===bx.iban4);
@@ -704,6 +710,24 @@ async function leerArchivo(f){
     return;
   }
   imp.raw=rows;imp.nombre=f.name;imp.pdfFin=null;imp.map=detectar(imp.raw);construirFilas();render();
+}
+/* CSV de Trade Republic: usa el importe que entra de verdad (después de comisiones y retención de Hacienda) */
+function trCSV(rows){
+  const h=(rows[0]||[]).map(x=>String(x??'').trim().toLowerCase());
+  const c=k=>h.indexOf(k);
+  if(c('transaction_id')<0||c('amount')<0||c('date')<0)return null;
+  const filas=[['FECHA','CONCEPTO','IMPORTE','SALDO','CLAVE ANTERIOR']],veces={};
+  rows.slice(1).forEach(r=>{
+    const fecha=parseFecha(r[c('date')]);if(!fecha)return;
+    const bruto=parseNum(r[c('amount')]);if(!bruto)return;
+    const neto=r2(bruto+(c('fee')>=0?parseNum(r[c('fee')]):0)+(c('tax')>=0?parseNum(r[c('tax')]):0));
+    const nombre=String(r[c('name')]??'').trim(),tipo=String(r[c('type')]??'').toUpperCase(),desc=String(r[c('description')]??'').trim();
+    const con=nombre||(/INTEREST/.test(tipo)?'Intereses (neto)':desc);
+    // Clave con la que se importó antes este mismo archivo (nombre e importe bruto), para no duplicar y corregir
+    const base='Trade Republic|'+fecha+'|'+norm(nombre)+'|'+r2(bruto);veces[base]=(veces[base]||0)+1;
+    filas.push([fecha,con,neto,'',base+'#'+veces[base]]);
+  });
+  return filas;
 }
 /* Excel de Bankinter: tabla de pendientes (compras con tarjeta aún sin cargar) + tabla de movimientos con saldo */
 function bankinterExcel(rows){
@@ -844,10 +868,10 @@ function detectar(rows){
   let fecha=find(/OPERACION|CONTABLE/);if(fecha<0||!/FECHA|DATE|F\./.test(head[fecha]))fecha=find(/FECHA|DATE/);
   let concepto=find(/CONCEPTO|DESCRIPCION|DETALLE|MOVIMIENTO|COMERCIO|DESCRIPTION|NAME|BENEFICIARIO|NOMBRE/);
   const importe=find(/IMPORTE|CANTIDAD|AMOUNT/,/SALDO|BALANCE/);
-  const cargo=find(/CARGO|DEBE|ADEUDO/),abono=find(/ABONO|HABER/),saldo=find(/SALDO|BALANCE/),pend=find(/^PENDIENTE$/);
+  const cargo=find(/CARGO|DEBE|ADEUDO/),abono=find(/ABONO|HABER/),saldo=find(/SALDO|BALANCE/),pend=find(/^PENDIENTE$/),ant=find(/^CLAVE ANTERIOR$/);
   if(h<0){fecha=0;concepto=1;return {h:-1,fecha,concepto,importe:2,cargo:-1,abono:-1,saldo:-1}}
   if(concepto<0)concepto=head.findIndex((x,i)=>i!==fecha&&i!==importe&&i!==cargo&&i!==abono);
-  return {h,fecha,concepto,importe,cargo,abono,saldo,pend};
+  return {h,fecha,concepto,importe,cargo,abono,saldo,pend,ant};
 }
 function buscarDup(fecha,importe,tipo,usados){
   const t=new Date(fecha).getTime();
@@ -857,7 +881,7 @@ function buscarDup(fecha,importe,tipo,usados){
   return movs.find(m=>libre(m)&&dias(m)<=3)||movs.find(m=>libre(m)&&m.origen==='fijo'&&dias(m)<=21);
 }
 function construirFilas(){
-  const {h,fecha,concepto,importe,cargo,abono}=imp.map;const colS=imp.map.saldo??-1,colP=imp.map.pend??-1;
+  const {h,fecha,concepto,importe,cargo,abono}=imp.map;const colS=imp.map.saldo??-1,colP=imp.map.pend??-1,colA=imp.map.ant??-1;
   const out=[],usados=new Set(),veces={};
   imp.raw.slice(h+1).forEach((r,n)=>{
     const f=parseFecha(r[fecha]);if(!f)return;
@@ -869,13 +893,15 @@ function construirFilas(){
     veces[base]=(veces[base]||0)+1;
     const esPend=colP>=0&&String(r[colP]??'').trim()!=='';
     const key=(esPend?'pend|':'')+base+'#'+veces[base];
-    const ya=movs.some(m=>!m.borrado&&m.importKey===key);
+    const viejo=colA>=0?movs.find(m=>!m.borrado&&m.importKey===String(r[colA]??'')):null;
+    const ya=movs.some(m=>!m.borrado&&m.importKey===key)||!!viejo;
+    const corrige=viejo&&viejo.importKey!==key?{id:viejo.id,importe:Math.abs(r2(v)),tipo:v<0?'gasto':'ingreso',key,nota:con}:null;
     const dup=ya?null:buscarDup(f,Math.abs(r2(v)),tipo,usados);
     if(dup)usados.add(dup.id);
     const catS=sugerir(con);
     const est=(!ya&&!dup&&catS)?movs.find(x=>!x.borrado&&x.origen==='fijo'&&String(x.nota).endsWith(AUTO)&&x.tipo===tipo&&x.categoria===catS&&!usados.has(x.id)&&Math.abs(new Date(x.fecha)-new Date(f))<=21*864e5):null;
     if(est)usados.add(est.id);
-    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con)||(imp.banco==='Trade Republic'?(/TRANSFER/i.test(con)?'traspaso':/INTER[EÉ]S|INTEREST/i.test(con)?'otros_ing':''):''),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,reemplaza:est?est.id:'',estTxt:est?eur(est.importe):'',n,pend:esPend,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
+    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con)||(imp.banco==='Trade Republic'?(/TRANSFER/i.test(con)?'traspaso':/INTER[EÉ]S|INTEREST/i.test(con)?'otros_ing':''):''),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,corrige,reemplaza:est?est.id:'',estTxt:est?eur(est.importe):'',n,pend:esPend,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
   });
   imp.filas=out.sort((a,b)=>a.fecha.localeCompare(b.fecha));
 }
@@ -903,7 +929,7 @@ function vImportar(){
 function filasHTML(){
   return imp.filas.map((f,i)=>{
     const [s,cls]=f.tipo==='gasto'?['−','neg']:['+','pos'];
-    const badge=(f.pend?'<span class="badge">Pendiente</span> ':'')+(f.reemplaza&&f.ok?'<span class="badge">Sustituye la estimación de '+esc(f.estTxt)+'</span> ':'')+(f.estado==='dup'?'<span class="badge w">¿Repetido? Ya tienes: '+esc(f.dupTxt)+'</span>':f.estado==='ya'?'<span class="badge">Ya importado</span>':'');
+    const badge=(f.pend?'<span class="badge">Pendiente</span> ':'')+(f.reemplaza&&f.ok?'<span class="badge">Sustituye la estimación de '+esc(f.estTxt)+'</span> ':'')+(f.estado==='dup'?'<span class="badge w">¿Repetido? Ya tienes: '+esc(f.dupTxt)+'</span>':f.estado==='ya'?(f.corrige?'<span class="badge w">Ya importado · se corrige a '+eur(f.corrige.importe)+'</span>':'<span class="badge">Ya importado</span>'):'');
     return '<div class="irow'+(f.ok?'':' off')+(f.ok&&!f.cat?' need':'')+'" id="ir'+i+'"><input type="checkbox"'+(f.ok?' checked':'')+' onchange="imp.filas['+i+'].ok=this.checked;$(\'#ifilas\').innerHTML=filasHTML()"><div class="imain"><b>'+esc(f.concepto||'(sin concepto)')+'</b><small class="muted">'+fechaCorta(f.fecha)+'</small> '+badge+'<select onchange="cambiarCatImp('+i+',this.value)">'+catOptions(f.cat,true)+'</select></div><span class="amt '+cls+'">'+s+eur(f.importe)+'</span></div>';
   }).join('');
 }
@@ -940,10 +966,13 @@ function saldoDelExtracto(){
 function importarSeleccion(){
   const sel=imp.filas.filter(f=>f.ok);
   const se=saldoDelExtracto();
-  if(!sel.length&&!se){toast('No hay nada seleccionado');return}
+  const corr=imp.filas.filter(f=>f.corrige);
+  if(!sel.length&&!se&&!corr.length){toast('No hay nada seleccionado');return}
+  corr.forEach(f=>{const m=movs.find(x=>x.id===f.corrige.id);if(m)Object.assign(m,{importe:f.corrige.importe,tipo:f.corrige.tipo,importKey:f.corrige.key,nota:m.nota||f.corrige.nota,modificado:Date.now(),pend:true})});
+  if(corr.length&&!sel.length){saveMovs();programarSync()}
   sel.forEach(f=>{if(f.reemplaza){const e=movs.find(x=>x.id===f.reemplaza);if(e)Object.assign(e,{borrado:true,modificado:Date.now(),pend:true})}});
   sel.forEach(f=>movs.push(nuevoMov({fecha:f.fecha,tipo:f.tipo,importe:f.importe,categoria:f.cat||(f.tipo==='gasto'?'extras':'otros_ing'),nota:f.concepto,quien:yo,origen:imp.banco,importKey:f.key})));
-  let msg=sel.length+' movimientos importados';
+  let msg=sel.length+' movimientos importados'+(corr.length?' · '+corr.length+' corregidos':'');
   if(se){
     const c=cfg.cuentas.find(x=>x.id===se.id);
     if(c&&(!c.fecha||se.fecha>=c.fecha)){c.saldo=se.saldo;c.fecha=se.fecha;c.ts=Date.now()+1;saveCfg();msg+=' · saldo de '+c.nombre+': '+eur(se.saldo)}
