@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-title" content="Cuentas">
 <title>Cuentas de Casa</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" href="icon2-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon2.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--bg:#f3f5f4;--card:#ffffff;--ink:#14201d;--muted:#5f6d69;--line:#e1e7e5;--brand:#0f766e;--brand-ink:#ffffff;--soft:#e3f2ef;--neg:#b91c1c;--pos:#15803d;--warn:#b45309;--warnbg:#fef3c7;--shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.05)}
@@ -164,19 +164,7 @@ function parseFecha(v){
   return null;
 }
 
-/* ===================== datos iniciales (sacados de tu Excel) ===================== */
-/* Recibos fijos: se apuntan solos el día de cobro. auto:'ultimo' = importe del último recibo visto en el banco */
-function FIJOS_V2(){return [
-  {id:uid(),cat:'alquiler',importe:728.92,mes:0,dia:1},
-  {id:uid(),cat:'pension',importe:300,mes:0,dia:1},
-  {id:uid(),cat:'luz',importe:null,mes:0,dia:3,auto:'ultimo'},
-  {id:uid(),cat:'mutua',importe:null,mes:0,dia:3,auto:'ultimo'},
-  {id:uid(),cat:'gimnasio',importe:65,mes:0,dia:5},
-  {id:uid(),cat:'compassion',importe:30,mes:0,dia:6},
-  {id:uid(),cat:'diezmo',porcentaje:10,mes:0,dia:6},
-  {id:uid(),cat:'vodafone',importe:65.64,mes:0,dia:22}
-]}
-const REGLAS_FIJOS=[['GABRIEL SALAS','alquiler'],['RHEMA','diezmo'],['ENERGIA XXI','luz'],['AXA SEGUROS','mutua'],['FIT FORCE','gimnasio'],['MANUELA CERDAN','pension']];
+/* ===================== configuración de serie (genérica; la vuestra vive en la hoja y en el móvil) ===================== */
 function defaultCfg(){
   const C=(id,nombre,icono,grupo,extra)=>Object.assign({id,nombre,icono,grupo,presupuesto:0,oculta:false},extra||{});
   const R=(texto,cat)=>({texto,cat});
@@ -198,21 +186,21 @@ function defaultCfg(){
       C('vacaciones','Vacaciones','✈️','variable'),
       C('extras','Extras','✨','variable'),
       C('alquiler','Alquiler','🔑','fijo'),
-      C('diezmo','Diezmo','⛪','fijo'),
-      C('ofrendas','Ofrendas','🙏','fijo'),
-      C('vodafone','Vodafone','📱','fijo'),
-      C('mutua','Seguro de salud (AXA)','🩺','fijo'),
-      C('compassion','Compassion','🤝','fijo'),
+      C('diezmo','Diezmo','⛪','fijo',{oculta:true}),
+      C('ofrendas','Ofrendas','🙏','fijo',{oculta:true}),
+      C('vodafone','Teléfono e internet','📱','fijo'),
+      C('mutua','Seguro de salud','🩺','fijo'),
+      C('compassion','Donativos','🤝','fijo'),
       C('luz','Luz y gas','💡','fijo'),
       C('gas','Gas','🔥','fijo',{oculta:true}),
       C('gimnasio','Gimnasio','🏋️','fijo'),
-      C('pension','Pensión alimenticia','👧','fijo'),
+      C('pension','Pensión alimenticia','👧','fijo',{oculta:true}),
       C('seguro_coche','Seguro coche','🚗','fijo'),
       C('seguro_hogar','Seguro hogar','🏡','fijo'),
       C('impuestos','Impuestos y tasas','🏛️','fijo'),
       C('itv','ITV y taller','🔧','fijo'),
-      C('nomina_h','Nómina Héctor','💼','ingreso'),
-      C('nomina_i','Nómina Irene','💼','ingreso'),
+      C('nomina_h','Nómina 1','💼','ingreso'),
+      C('nomina_i','Nómina 2','💼','ingreso'),
       C('pagas','Pagas extra','🎁','ingreso'),
       C('hacienda','Hacienda','🧾','ingreso'),
       C('otros_ing','Otros ingresos','💶','ingreso'),
@@ -220,7 +208,7 @@ function defaultCfg(){
       C('pago_tarjeta','Pago de la tarjeta','💳','neutro'),
       C('inversion','Inversión / ahorro','📈','neutro')
     ],
-    fijos:FIJOS_V2(),
+    fijos:[],
     fijosV:2,
     reglas:[
       R('MERCADONA','super'),R('LIDL','super'),R('ALDI','super'),R('EROSKI','super'),R('CARREFOUR','super'),R('CONSUM','super'),R('SUPERMERCADO','super'),R('HIPERCENTRO','super'),
@@ -243,9 +231,9 @@ function defaultCfg(){
       {id:uid(),nombre:'Gasolina',importe:null,cat:'gasolina'},
       {id:uid(),nombre:'Parking',importe:null,cat:'parking'}
     ],
-    cuentas:[{id:'bankinter',nombre:'Bankinter casa (Irene)',tipo:'dia',saldo:null,fecha:'',ts:0,iban4:'4755'},{id:'bankinter_h',nombre:'Bankinter Héctor',tipo:'personal',saldo:null,fecha:'',ts:0,iban4:'2084'},{id:'tr',nombre:'Trade Republic',tipo:'ahorro',saldo:null,fecha:'',ts:0}],
+    cuentas:[{id:'bankinter',nombre:'Cuenta de casa',tipo:'dia',saldo:null,fecha:'',ts:0},{id:'bankinter_h',nombre:'Cuenta personal',tipo:'personal',saldo:null,fecha:'',ts:0},{id:'tr',nombre:'Ahorro',tipo:'ahorro',saldo:null,fecha:'',ts:0}],
     nominaSig:{dia:20},
-    personas:['Héctor','Irene'],
+    personas:['Persona 1','Persona 2'],
     modificado:0
   };
 }
@@ -263,26 +251,17 @@ function asegurarCats(c){
     c.cats.splice(pos,0,d);cambio=true;
   });
   if(!c.nominaSig){c.nominaSig={dia:20};cambio=true}
-  if((Number(c.fijosV)||0)<2){
-    c.fijos=FIJOS_V2();c.fijosV=2;cambio=true;
-    const ren={mutua:['Agrupació Mutua','Seguro de salud (AXA)'],luz:['Luz','Luz y gas']};
-    c.cats.forEach(x=>{if(ren[x.id]&&x.nombre===ren[x.id][0])x.nombre=ren[x.id][1];if(x.id==='gas')x.oculta=true});
-    if(!Array.isArray(c.reglas))c.reglas=[];
-    REGLAS_FIJOS.forEach(([t,cat])=>{if(!c.reglas.some(r=>norm(r.texto)===t))c.reglas.unshift({texto:t,cat})});
-  }
+  if((Number(c.fijosV)||0)<2){c.fijosV=2;cambio=true}
   if(!Array.isArray(c.cuentas))c.cuentas=[];
   defaultCfg().cuentas.forEach((d,i)=>{if(!c.cuentas.some(x=>x.id===d.id)){c.cuentas.splice(Math.min(i,c.cuentas.length),0,d);cambio=true}});
-  const bk=c.cuentas.find(x=>x.id==='bankinter');if(bk&&bk.nombre==='Bankinter'){bk.nombre='Bankinter casa (Irene)';cambio=true}
-  defaultCfg().cuentas.forEach(d=>{const x=c.cuentas.find(y=>y.id===d.id);if(x&&d.iban4&&!x.iban4){x.iban4=d.iban4;cambio=true}});
-  // Transferencias entre vuestras cuentas = traspasos (van delante para que ganen a otras palabras)
   if(!Array.isArray(c.reglas))c.reglas=[];
-  ['HECTOR JAVIER MAYOL','IRENE SANS MEDIANO'].forEach(t=>{if(!c.reglas.some(r=>norm(r.texto)===t)){c.reglas.unshift({texto:t,cat:'traspaso'});cambio=true}});
+  if(!Array.isArray(c.personas)||!c.personas.length){c.personas=defaultCfg().personas;cambio=true}
   if(cambio){c.modificado=(Number(c.modificado)||0)+1;store.set('cc_cfg',c)}
   return c;
 }
 asegurarCats(cfg);
 let sync=store.get('cc_sync',{url:'',clave:'',desde:0,ultimaOk:0,error:''});
-let yo=store.get('cc_yo','Héctor');
+let yo=store.get('cc_yo',null)||cfg.personas[0];
 let vista='apuntar';
 const ahoraD=new Date();
 let vm={y:ahoraD.getFullYear(),m:ahoraD.getMonth()};
@@ -463,7 +442,7 @@ function vMovs(){
   const t=calc(deMes(vm.y,vm.m));
   return monthNav()
    +'<div class="kpis"><div class="kpi"><small>Ingresos</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi"><small>Gastos</small><b>'+eur(t.gastos)+'</b></div><div class="kpi"><small>Ahorro</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>'
-   +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, Irene…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option>'+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
+   +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option>'+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
 }
 
 /* ===================== RESUMEN ===================== */
@@ -474,8 +453,17 @@ function pendientesFijos(y,m,t){
     return Object.assign({},f,{sugerido:imp});
   });
 }
+/* Nombre en pantalla de cada «banco» del importador (los valores internos no cambian) */
+const BANCO_CUENTA={'Bankinter':'bankinter','Bankinter Héctor':'bankinter_h','Trade Republic':'tr'};
+function esDeCuentaPersonal(titular){
+  const pal=c=>c?norm(c.nombre).split(/[^A-Z0-9]+/).filter(w=>w.length>=4):[];
+  const p=pal(cfg.cuentas.find(c=>c.tipo==='personal')),d=pal(cfg.cuentas.find(c=>c.tipo==='dia'));
+  const t=norm(titular),propias=(a,b)=>a.filter(w=>!b.includes(w));
+  return propias(p,d).some(w=>t.includes(w))&&!propias(d,p).some(w=>t.includes(w));
+}
+function nombreBanco(b){const c=cfg.cuentas.find(x=>x.id===BANCO_CUENTA[b]);return c?c.nombre:b}
 /* ===================== SALDO Y LO QUE QUEDA ===================== */
-/* De qué cuenta sale cada apunte: todo es de la cuenta de casa salvo lo importado de otras cuentas y la pensión (cuenta de Héctor) */
+/* De qué cuenta sale cada apunte: todo es de la cuenta de casa salvo lo importado de otras cuentas y la pensión (cuenta personal) */
 const cuentaCat=cat=>cat==='pension'?'bankinter_h':'bankinter';
 const cuentaDe=m=>m.origen==='Trade Republic'?'tr':m.origen==='Bankinter Héctor'?'bankinter_h':m.origen==='Bankinter'?'bankinter':cuentaCat(m.categoria);
 function saldoCuenta(c){
@@ -706,7 +694,7 @@ async function leerArchivo(f){
   if(bx){
     const c=cfg.cuentas.find(x=>x.iban4&&x.iban4===bx.iban4);
     imp.banco=c?(c.id==='bankinter_h'?'Bankinter Héctor':c.id==='tr'?'Trade Republic':'Bankinter'):(imp.banco==='Bankinter Héctor'?'Bankinter Héctor':'Bankinter');
-    imp.raw=bx.filas;imp.nombre=f.name;imp.pdfFin=bx.fin;imp.map=detectar(imp.raw);construirFilas();render();
+    imp.iban4=bx.iban4||'';imp.raw=bx.filas;imp.nombre=f.name;imp.pdfFin=bx.fin;imp.map=detectar(imp.raw);construirFilas();render();
     toast((c?c.nombre:'Bankinter')+': '+(bx.filas.length-1)+' movimientos'+(bx.pend?' ('+bx.pend+' pendientes)':''));
     return;
   }
@@ -852,11 +840,11 @@ async function leerPdf(f){
     // ¿De quién es la cuenta? Miramos el nombre que va debajo de «Titulares»
     const ti=items.find(i=>/^Titulares$/i.test(i.s.trim()));
     const tit=ti?items.filter(i=>i.p===ti.p&&Math.abs(i.x-ti.x)<6&&i.y<ti.y&&ti.y-i.y<14).map(i=>i.s.toUpperCase()).join(' '):'';
-    banco=/HECTOR/.test(tit)&&!/IRENE/.test(tit)?'Bankinter Héctor':'Bankinter';res=pdfBankinter(items)}
+    banco=esDeCuentaPersonal(tit)?'Bankinter Héctor':'Bankinter';res=pdfBankinter(items)}
   else{toast('Este PDF no lo reconozco. Por ahora leo los de Bankinter y Trade Republic.');return}
   if(res.filas.length<2){toast('No encuentro movimientos en este PDF');return}
   imp.banco=banco;imp.raw=res.filas;imp.nombre=f.name;imp.pdfFin=res.fin;imp.map=detectar(imp.raw);construirFilas();render();
-  toast(({'Bankinter':'Bankinter casa (Irene)'}[banco]||banco)+': '+(res.filas.length-1)+' movimientos leídos');
+  toast(nombreBanco(banco)+': '+(res.filas.length-1)+' movimientos leídos');
 }
 function detectar(rows){
   let h=-1;
@@ -908,7 +896,7 @@ function construirFilas(){
 }
 function vImportar(){
   let h='<section class="card"><h2>Importar extracto del banco</h2><p class="muted small" style="margin-top:-4px">Sube el extracto del banco en <b>PDF, Excel o CSV</b> (Bankinter y Trade Republic en PDF se leen directamente). La app reconoce las tiendas, te pregunta las que no conoce y avisa si un gasto ya lo habías apuntado a mano.</p>'
-   +'<label>Banco<select onchange="imp.banco=this.value;if(imp.raw){construirFilas();render()}">'+[['Bankinter','Bankinter casa (Irene)'],['Bankinter Héctor','Bankinter Héctor'],['Trade Republic','Trade Republic'],['Otro','Otro']].map(([v,t])=>'<option value="'+v+'"'+(imp.banco===v?' selected':'')+'>'+t+'</option>').join('')+'</select></label>'
+   +'<label>Banco<select onchange="imp.banco=this.value;if(imp.raw){construirFilas();render()}">'+[['Bankinter',nombreBanco('Bankinter')],['Bankinter Héctor',nombreBanco('Bankinter Héctor')],['Trade Republic',nombreBanco('Trade Republic')],['Otro','Otra cuenta']].map(([v,t])=>'<option value="'+v+'"'+(imp.banco===v?' selected':'')+'>'+t+'</option>').join('')+'</select></label>'
    +'<label class="file">📄 '+(imp.nombre?esc(imp.nombre)+' · elegir otro':'Elegir archivo del extracto')+'<input type="file" accept=".csv,.xls,.xlsx,.txt,.pdf" onchange="leerArchivo(this.files[0]);this.value=\'\'"></label></section>';
   if(!imp.raw)return h;
   const cols=(imp.raw[Math.max(imp.map.h,0)]||[]).map((x,i)=>imp.map.h>=0&&String(x).trim()?String(x).trim():'Columna '+(i+1));
@@ -978,6 +966,7 @@ function importarSeleccion(){
     const c=cfg.cuentas.find(x=>x.id===se.id);
     if(c&&(!c.fecha||se.fecha>=c.fecha)){c.saldo=se.saldo;c.fecha=se.fecha;c.ts=Date.now()+1;saveCfg();msg+=' · saldo de '+c.nombre+': '+eur(se.saldo)}
   }
+  {const c=cfg.cuentas.find(x=>x.id===BANCO_CUENTA[imp.banco]);if(c&&imp.iban4&&!c.iban4&&!cfg.cuentas.some(x=>x.iban4===imp.iban4)){c.iban4=imp.iban4;saveCfg()}} // la próxima vez reconoce esta cuenta sola
   if(sel.length){saveMovs();programarSync();const ult=sel[sel.length-1].fecha.split('-');vm={y:+ult[0],m:+ult[1]-1};vista='movs'}else vista='resumen';
   imp={banco:imp.banco,raw:null,map:null,filas:[],nombre:'',pdfFin:null};
   render();toast(msg);
@@ -989,7 +978,7 @@ function vAjustes(){
   const enPapelera=movs.filter(m=>m.borrado);
   const grupoCats=(g,t)=>'<h3>'+t+'</h3>'+cfg.cats.filter(c=>c.grupo===g).map(c=>'<div class="crow"><input class="ico" value="'+esc(c.icono)+'" onchange="setCat(\''+c.id+'\',\'icono\',this.value)"><input value="'+esc(c.nombre)+'" onchange="setCat(\''+c.id+'\',\'nombre\',this.value)">'+(g==='variable'?'<input inputmode="decimal" placeholder="Sin límite" value="'+(c.presupuesto?String(c.presupuesto).replace('.',','):'')+'" onchange="setCat(\''+c.id+'\',\'presupuesto\',parseNum(this.value))">':'<span></span>')+'<label><input type="checkbox"'+(c.oculta?'':' checked')+' onchange="setCat(\''+c.id+'\',\'oculta\',!this.checked)">Ver</label></div>').join('');
   const mesOpts=sel=>'<option value="0">Cada mes</option>'+MESES.map((m,i)=>'<option value="'+(i+1)+'"'+(sel===i+1?' selected':'')+'>Solo '+m.toLowerCase()+'</option>').join('');
-  return '<section class="card"><h2>¿Quién usa este móvil?</h2><div class="seg">'+cfg.personas.map(p=>'<button class="'+(yo===p?'on':'')+'" onclick="setYo(\''+esc(p)+'\')">'+esc(p)+'</button>').join('')+'</div><p class="muted small">Los apuntes se marcan con este nombre.</p></section>'
+  return '<section class="card"><h2>¿Quién usa este móvil?</h2><div class="seg">'+cfg.personas.map(p=>'<button class="'+(yo===p?'on':'')+'" onclick="setYo(\''+esc(p)+'\')">'+esc(p)+'</button>').join('')+'</div><p class="muted small">Los apuntes se marcan con este nombre.</p><details><summary class="small">Cambiar los nombres</summary><div class="row2">'+cfg.personas.map((p,i)=>'<input value="'+esc(p)+'" aria-label="Nombre '+(i+1)+'" onchange="renombrarPersona('+i+',this.value)">').join('')+'</div></details></section>'
   +'<section class="card"><h2>💼 Nóminas</h2><p class="muted small" style="margin-top:-4px">Las nóminas que entran a partir de este día cuentan para el mes siguiente (con ellas vivís el mes que empieza). Pon 0 para desactivarlo.</p><label>A partir del día<input type="number" min="0" max="31" inputmode="numeric" value="'+(Number((cfg.nominaSig||{}).dia)||0)+'" onchange="cfg.nominaSig={dia:Math.max(0,Math.min(31,parseInt(this.value)||0))};saveCfg();render()"></label></section>'
   +'<section class="card"><h2>💶 Saldo de las cuentas</h2><p class="muted small" style="margin-top:-4px">Escribe el saldo que ves hoy en el banco. Desde ahí la app suma los ingresos y resta los gastos. Al importar un extracto con columna de saldo se corrige solo.</p>'
    +cfg.cuentas.map(c=>{const s=saldoCuenta(c);return '<h3>'+esc(c.nombre)+({dia:' · día a día',personal:' · personal',ahorro:' · ahorro'}[c.tipo]||'')+'</h3>'+(s!==null?'<p class="small" style="margin:0 0 6px">Ahora: <b>'+eur(s)+'</b> <span class="muted">(puesto el '+fechaCorta(c.fecha)+')</span></p>':'<p class="small muted" style="margin:0 0 6px">Sin saldo todavía.</p>')+'<div class="row2"><input id="sal_'+c.id+'" inputmode="decimal" placeholder="Saldo de hoy"><button class="btn sm" style="margin:4px 0 0" onclick="ponerSaldo(\''+c.id+'\')">Guardar saldo</button></div>'}).join('')+'</section>'
@@ -998,7 +987,7 @@ function vAjustes(){
    +'<label>Dirección de tu hoja (URL de la aplicación web)<input value="'+esc(sync.url)+'" placeholder="https://script.google.com/macros/s/…/exec" onchange="sync.url=this.value.trim();sync.desde=0;store.set(\'cc_sync\',sync)"></label>'
    +'<label>Clave secreta<input type="password" value="'+esc(sync.clave)+'" onchange="sync.clave=this.value.trim();store.set(\'cc_sync\',sync)"></label>'
    +'<div class="row2"><button class="btn ghost" onclick="probarNube()">Probar conexión</button><button class="btn" onclick="sincronizar(true)">Sincronizar ahora</button></div>'
-   +'<details><summary>¿Cómo se conecta? (una sola vez, 10 minutos)</summary><ol class="steps"><li>Crea una hoja nueva en Google Drive llamada <b>Cuentas de Casa</b>.</li><li>Menú <b>Extensiones → Apps Script</b>. Borra lo que haya y pega el código del archivo <code>Codigo.gs</code>.</li><li>En la línea de <code>CLAVE</code> inventa una contraseña larga y guarda (💾).</li><li><b>Implementar → Nueva implementación</b> → tipo <b>Aplicación web</b>. Ejecutar como: <b>Yo</b>. Quién tiene acceso: <b>Cualquier usuario</b>. Autoriza los permisos.</li><li>Copia la URL que acaba en <code>/exec</code> y pégala arriba con tu clave.</li><li>Irene hace lo mismo en su móvil: misma URL y misma clave.</li></ol><p class="small muted">La app nunca borra nada en la hoja: lo que mandas a la papelera solo queda marcado. Y Google guarda el historial de versiones.</p></details></section>'
+   +'<details><summary>¿Cómo se conecta? (una sola vez, 10 minutos)</summary><ol class="steps"><li>Crea una hoja nueva en Google Drive llamada <b>Cuentas de Casa</b>.</li><li>Menú <b>Extensiones → Apps Script</b>. Borra lo que haya y pega el código del archivo <code>Codigo.gs</code>.</li><li>En la línea de <code>CLAVE</code> inventa una contraseña larga y guarda (💾).</li><li><b>Implementar → Nueva implementación</b> → tipo <b>Aplicación web</b>. Ejecutar como: <b>Yo</b>. Quién tiene acceso: <b>Cualquier usuario</b>. Autoriza los permisos.</li><li>Copia la URL que acaba en <code>/exec</code> y pégala arriba con tu clave.</li><li>La otra persona hace lo mismo en su móvil: misma URL y misma clave.</li></ol><p class="small muted">La app nunca borra nada en la hoja: lo que mandas a la papelera solo queda marcado. Y Google guarda el historial de versiones.</p></details></section>'
 
   +'<section class="card"><h2>Categorías y presupuestos</h2><p class="muted small" style="margin-top:-4px">Pon un límite al mes en los gastos del día a día y verás la barra en verde, naranja o rojo.</p>'
    +grupoCats('variable','Día a día (icono · nombre · límite/mes)')+grupoCats('fijo','Recibos fijos')+grupoCats('ingreso','Ingresos')+grupoCats('neutro','No cuentan')
@@ -1020,6 +1009,7 @@ function vAjustes(){
 
   +'<section class="card"><details><summary><b>🗑️ Papelera ('+enPapelera.length+')</b></summary>'+(enPapelera.length?enPapelera.sort((a,b)=>b.modificado-a.modificado).slice(0,100).map(m=>'<div class="flex" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span class="small">'+catById(m.categoria).icono+' '+esc(catById(m.categoria).nombre)+' · '+eur(m.importe)+' · '+fechaCorta(m.fecha)+'</span><button class="btn sm ghost" onclick="updMov(\''+m.id+'\',{borrado:false});render()">Recuperar</button></div>').join(''):'<p class="muted small">Vacía.</p>')+'</details></section>';
 }
+function renombrarPersona(i,v){v=String(v||'').trim();const ant=cfg.personas[i];if(!v||v===ant||cfg.personas.includes(v)){render();return}cfg.personas[i]=v;if(yo===ant){yo=v;store.set('cc_yo',v)}saveCfg();render();toast('Nombre cambiado')}
 function setYo(p){yo=p;store.set('cc_yo',p);form.quien='';render()}
 function setCat(id,k,v){const c=cfg.cats.find(x=>x.id===id);if(!c)return;c[k]=v;saveCfg()}
 function nuevaCat(){const nom=$('#nNom').value.trim();if(!nom){toast('Escribe el nombre');return}cfg.cats.push({id:'c_'+uid().slice(0,8),nombre:nom,icono:$('#nIco').value.trim()||'🏷️',grupo:$('#nGru').value,presupuesto:0,oculta:false});saveCfg();render();toast('Categoría añadida')}
@@ -1108,7 +1098,7 @@ async function sincronizar(manual){
       if(i<0)movs.push(Object.assign(r,{pend:false}));
       else if(!(movs[i].pend&&movs[i].modificado>r.modificado))movs[i]=Object.assign(r,{pend:false});
     });
-    if(j.cfg&&(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0)){cfg=asegurarCats(j.cfg);store.set('cc_cfg',cfg)}
+    if(j.cfg&&(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0)){cfg=asegurarCats(j.cfg);store.set('cc_cfg',cfg);if(!cfg.personas.includes(yo)&&!store.get('cc_yo',null))yo=cfg.personas[0]}
     sync.desde=j.ahora;sync.ultimaOk=Date.now();sync.error='';mercaCache={};
     store.set('cc_sync',sync);saveMovs();
     if(!syncSesion){syncSesion=true;try{generarFijos()}catch(e){}}
