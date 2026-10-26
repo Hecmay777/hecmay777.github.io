@@ -597,6 +597,7 @@ function ultimoImporteBanco(cat,antesDe){
   return r2(delBanco.filter(x=>String(x.fecha).startsWith(ult)).reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0));
 }
 function generarFijos(){
+  if(sync.url&&sync.clave&&!syncSesion)return; // primero hay que traer lo que ya hay en la hoja, para no repetir recibos
   const d=new Date(),y=d.getFullYear(),m=d.getMonth(),ym=y+'-'+pad(m+1),fin=new Date(y,m+1,0).getDate();
   let cambio=false;
   (cfg.fijos||[]).forEach(f=>{
@@ -1074,7 +1075,7 @@ async function restaurarCopia(f){
 }
 
 /* ===================== Sincronización con Google ===================== */
-let syncTimer=null,sincronizando=false;
+let syncTimer=null,sincronizando=false,syncSesion=false;
 function estadoSync(){
   const dot=$('#syncDot'),txt=$('#syncTxt');if(!dot)return;
   const pend=movs.some(m=>m.pend);
@@ -1110,6 +1111,7 @@ async function sincronizar(manual){
     if(j.cfg&&(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0)){cfg=asegurarCats(j.cfg);store.set('cc_cfg',cfg)}
     sync.desde=j.ahora;sync.ultimaOk=Date.now();sync.error='';mercaCache={};
     store.set('cc_sync',sync);saveMovs();
+    if(!syncSesion){syncSesion=true;try{generarFijos()}catch(e){}}
     if(manual)toast('☁️ Todo guardado en la nube');
     const ocupado=document.activeElement&&/INPUT|SELECT/.test(document.activeElement.tagName);
     if(!ocupado&&$('#modal').classList.contains('hidden')&&vista!=='importar')render();
