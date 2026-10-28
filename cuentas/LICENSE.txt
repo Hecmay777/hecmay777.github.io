@@ -1,0 +1,5 @@
+Copyright © 2026 Héctor Javier Mayol Salas. Todos los derechos reservados.
+
+Este software y su código fuente son propiedad exclusiva de su autor, Héctor Javier Mayol Salas. Queda prohibido copiarlo, modificarlo, distribuirlo, publicarlo, venderlo o usarlo para crear otros productos sin autorización previa y por escrito del autor.
+
+El uso de la aplicación "Cuentas de Casa" se permite únicamente a las personas a las que el autor se la haya compartido, solo para uso personal y sin derecho a redistribuirla.
