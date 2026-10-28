@@ -85,7 +85,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:15.5
 .bhead{display:flex;justify-content:space-between;gap:8px;font-size:15.5px}.bhead span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
 .muted{color:var(--muted)}.small{font-size:14.5px}
 .donutbox{display:flex;gap:16px;align-items:center;flex-wrap:wrap}.donut{width:150px;flex:none}
-.legend{flex:1;min-width:160px;font-size:13.5px}.legend div{display:flex;align-items:center;gap:8px;padding:3px 0}.legend i{width:10px;height:10px;border-radius:3px;flex:none}.legend span{flex:1}
+.lgb{display:flex;align-items:center;gap:8px;width:100%;padding:6px 2px;border:0;background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer;border-radius:8px}.lgb:active,.lgb:focus-visible{background:var(--line)}.lgb i{width:10px;height:10px;border-radius:3px;flex:none}.lgb span{flex:1}.lgb em{font-style:normal;color:var(--muted);font-size:17px;line-height:1}.legend{flex:1;min-width:160px;font-size:13.5px}.legend div{display:flex;align-items:center;gap:8px;padding:3px 0}.legend i{width:10px;height:10px;border-radius:3px;flex:none}.legend span{flex:1}
 .dt1{font-size:11.5px;fill:var(--muted)}.dt2{font-size:15.5px;font-weight:700;fill:var(--ink)}
 .nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:6}
 .nav div{display:grid;grid-template-columns:repeat(5,1fr);max-width:640px;width:100%}
@@ -356,6 +356,7 @@ function finBienvenida(a){
   else{vista='apuntar';render();toast('¡Listo! Ya puedes apuntar tu primer gasto')}
 }
 function ir(v){vista=v;render();window.scrollTo(0,0)}
+function verCat(id){filtroCat=id;filtroTxt='';ir('movs')}
 function render(sinGuardarForm){
   if(bienv){$('#app').innerHTML=vBienvenida();document.querySelector('.nav').style.display='none';return}
   document.querySelector('.nav').style.display='';
@@ -868,7 +869,7 @@ function pendientesFijos(y,m,t){
 /* ===================== CUENTAS ===================== */
 /* Las tres primeras cuentas guardan su clave antigua en los apuntes importados (para no duplicar al reimportar) */
 const CLAVE_ANTIGUA={bankinter:'Bankinter',bankinter_h:'Bankinter Héctor',tr:'Trade Republic'};
-const BANCOS={bankinter:'Bankinter',tr:'Trade Republic',otro:'Otro banco'};
+const BANCOS={bankinter:'Bankinter',tr:'Trade Republic',santander:'Santander',bbva:'BBVA',caixabank:'CaixaBank',sabadell:'Banco Sabadell',ing:'ING',openbank:'Openbank',abanca:'Abanca',unicaja:'Unicaja Banco',kutxabank:'Kutxabank',ibercaja:'Ibercaja',cajamar:'Cajamar',cajarural:'Caja Rural',bancamarch:'Banca March',colonya:'Colonya Caixa Pollença',evo:'EVO Banco',revolut:'Revolut',n26:'N26',wise:'Wise',myinvestor:'MyInvestor',targobank:'Targobank',laboral:'Laboral Kutxa',cajasur:'Cajasur',otro:'Otro banco'};
 const TIPOS_CUENTA={dia:'Día a día',personal:'Personal',ahorro:'Ahorro'};
 const cuentasVis=()=>cfg.cuentas.filter(c=>!c.oculta);
 const claveImp=c=>CLAVE_ANTIGUA[c.id]||c.id;
@@ -1015,11 +1016,11 @@ function resumenMes(){
   }
   const gastosCat=cfg.cats.filter(c=>(c.grupo==='variable'||c.grupo==='fijo')&&(t.cat[c.id]||0)>0).map(c=>({c,v:t.cat[c.id]})).sort((a,b)=>b.v-a.v);
   if(gastosCat.length){
-    const top=gastosCat.slice(0,8).map((x,i)=>({lab:x.c.nombre,v:x.v,col:PALETA[i%PALETA.length]}));
+    const top=gastosCat.slice(0,8).map((x,i)=>({id:x.c.id,lab:x.c.nombre,v:x.v,col:PALETA[i%PALETA.length]}));
     const resto=gastosCat.slice(8).reduce((a,x)=>a+x.v,0);
     if(resto>0)top.push({lab:'Resto',v:resto,col:PALETA[9]});
     const tot=top.reduce((a,x)=>a+x.v,0);
-    h+='<section class="card"><h2>¿En qué se ha ido el dinero?</h2><div class="donutbox">'+donut(top,tot)+'<div class="legend">'+top.map(x=>'<div><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b></div>').join('')+'</div></div></section>';
+    h+='<section class="card"><h2>¿En qué se ha ido el dinero?</h2><div class="donutbox">'+donut(top,tot)+'<div class="legend">'+top.map(x=>x.id?'<button type="button" class="lgb" onclick="verCat(\''+x.id+'\')" aria-label="Ver los movimientos de '+esc(x.lab)+'"><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b><em aria-hidden="true">›</em></button>':'<div><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b></div>').join('')+'</div></div><p class="muted small" style="margin:8px 0 0">Toca una categoría para ver sus movimientos.</p></section>';
   }
   const vars=visibles('variable');
   const maxV=Math.max(1,...vars.map(c=>t.cat[c.id]||0));
@@ -1172,7 +1173,7 @@ function aplicarMapa(){
   ['fecha','concepto','importe','cargo','abono','saldo'].forEach(k=>{if(k in c.mapa)imp.map[k]=c.mapa[k]?col(c.mapa[k]):-1});
 }
 function guardarMapa(){
-  const c=cuentaImp();if(!c||bancoDe(c)!=='otro'||imp.pdfFin||!imp.map||imp.map.h<0)return;
+  const c=cuentaImp();if(!c||bancoDe(c)==='bankinter'||bancoDe(c)==='tr'||imp.pdfFin||!imp.map||imp.map.h<0)return;
   const head=(imp.raw[imp.map.h]||[]).map(x=>String(x??'').trim());const n=i=>i>=0&&head[i]?head[i]:'';
   const m={fecha:n(imp.map.fecha),concepto:n(imp.map.concepto),importe:n(imp.map.importe),cargo:n(imp.map.cargo),abono:n(imp.map.abono),saldo:n(imp.map.saldo??-1)};
   if(JSON.stringify(m)!==JSON.stringify(c.mapa||{})){c.mapa=m;saveCfg()}
