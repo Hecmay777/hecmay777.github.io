@@ -470,9 +470,9 @@ let tk=null;
 const botonTicket=()=>'<button class="btn ghost" style="margin:10px 0 0" onclick="abrirLector()">📷 Ticket o captura del banco</button>';
 function abrirLector(){
   if(!sync.url||!sync.clave){toast('Para leer fotos hay que tener conectada la hoja de Google (Ajustes)');return}
-  $('#sheet').innerHTML='<h2>Leer una imagen</h2><p class="muted small" style="margin-top:-4px">Haz una foto o elige una imagen de la galería.</p>'
-   +'<label class="file" style="margin-top:8px">🧾 Ticket de compra<small class="muted" style="display:block;font-weight:500">un apunte por artículo</small><input type="file" accept="image/*" onchange="leerImagen(this.files[0],\'ticket\');this.value=\'\'"></label>'
-   +'<label class="file" style="margin-top:10px">🏦 Captura de movimientos del banco<small class="muted" style="display:block;font-weight:500">una línea = un apunte</small><input type="file" accept="image/*" onchange="leerImagen(this.files[0],\'banco\');this.value=\'\'"></label>'
+  $('#sheet').innerHTML='<h2>Añadir desde foto o archivo</h2><p class="muted small" style="margin-top:-4px">Vale un ticket, una compra de Amazon u otra tienda, una factura o una captura de movimientos del banco. La app reconoce de qué se trata.</p>'
+   +'<label class="file" style="margin-top:8px">📷 Hacer foto<input type="file" accept="image/*" capture="environment" onchange="leerImagen(this.files[0]);this.value=\'\'"></label>'
+   +'<label class="file" style="margin-top:10px">🖼️ Elegir de la galería o de archivos<small class="muted" style="display:block;font-weight:500">capturas, fotos y PDF</small><input type="file" accept="image/*,application/pdf" onchange="leerImagen(this.files[0]);this.value=\'\'"></label>'
    +'<button class="btn ghost" onclick="cerrar()">Cancelar</button>';
   abrir();
 }
@@ -484,17 +484,18 @@ async function reducirImagen(f){
   const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(bm,0,0,c.width,c.height);
   return c.toDataURL('image/jpeg',0.85).split(',')[1];
 }
-async function leerImagen(f,modo){
+function leerComoBase64(f){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ko(new Error('No se pudo abrir el archivo'));r.readAsDataURL(f)})}
+async function leerImagen(f){
   if(!f)return;
-  $('#sheet').innerHTML='<h2>Leyendo la imagen…</h2><p class="muted">Suele tardar unos segundos.</p>';abrir();
+  const pdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
+  if(pdf&&f.size>6e6){toast('El PDF pesa demasiado (máximo 6 MB). Prueba con una captura.');return}
+  $('#sheet').innerHTML='<h2>Leyendo…</h2><p class="muted">Suele tardar unos segundos.</p>';abrir();
   let j;
-  try{j=await llamar({accion:'ocr',imagen:await reducirImagen(f),mime:'image/jpeg'})}
-  catch(e){cerrar();toast('No he podido leer la imagen: '+(e.message||e));return}
+  try{j=await llamar({accion:'ocr',imagen:pdf?await leerComoBase64(f):await reducirImagen(f),mime:pdf?'application/pdf':'image/jpeg'})}
+  catch(e){cerrar();toast('No he podido leer el archivo: '+(e.message||e));return}
   if(typeof j.texto!=='string'){cerrar();toast('Falta actualizar el script de Google para leer imágenes');return}
-  if(modo==='banco'){cerrar();bancoDeTexto(j.texto);return}
-  tk=ticketDeTexto(j.texto,j.ticket);
-  if(!tk.items.length){cerrar();toast('No encuentro artículos. Prueba con una foto más recta y con buena luz.');return}
-  pintarTicket();
+  lec={texto:j.texto,srv:j.ticket};cp=null;
+  aplicarLectura(tipoDeTexto(j.texto,j.ticket));
 }
 /* ---- ticket de compra ---- */
 function numFechaOcr(y,m,d){
@@ -509,7 +510,7 @@ function comercioDeTicket(t){
 }
 /* Ticket de un comercio cualquiera. El lector de Google a veces separa descripción e importe en líneas distintas: se admiten las dos formas */
 function parseGenerico(texto){
-  const SKIP=/TOTAL|SUBTOTAL|IVA\b|I\.V\.A|BASE|CUOTA|ENTREGADO|CAMBIO|EFECTIVO|TARJETA|VISA|MASTERCARD|A PAGAR|FACTURA|TICKET|NIF|CIF|TEL[EÉ]F|FECHA|HORA|CAJA|OPERADOR|GRACIAS|PUNTOS|DESCUENTO|AHORRO|^DESCRIPCI|^P\. ?UNIT|^IMPORTE|^CANT|^PRECIO|\bOP:/i;
+  const SKIP=/TOTAL|SUBTOTAL|IVA\b|I\.V\.A|BASE|CUOTA|ENTREGADO|CAMBIO|EFECTIVO|TARJETA|VISA|MASTERCARD|A PAGAR|FACTURA|TICKET|NIF|CIF|TEL[EÉ]F|FECHA|HORA|CAJA|OPERADOR|GRACIAS|PUNTOS|DESCUENTO|AHORRO|ENV[IÍ]O|^ART[IÍ]CULOS|GASTOS DE|PEDIDO|^DESCRIPCI|^P\. ?UNIT|^IMPORTE|^CANT|^PRECIO|\bOP:/i;
   const L=String(texto).split(/\r?\n/).map(l=>l.replace(/\u00a0/g,' ').trim()).filter(Boolean);
   const P='-?\\d{1,4}[.,]\\d{2}(?!\\d)',letras=/[A-Za-zÁÉÍÓÚÑáéíóúñ]{2}/;
   const soloPrecios=new RegExp('^(?:'+P+'\\s*(?:€\\/?\\s*kg|kg|€|EUR|[A-Z])?\\s*){1,3}$','i');
@@ -533,7 +534,7 @@ function parseGenerico(texto){
   return {items,total,ok:false};
 }
 const GRUPO_CAT={'Limpieza y hogar':'casa','Higiene':'farmacia','Suplementos':'suplementacion'};
-function catDeArticulo(d,grupo){
+function catDeArticulo(d,grupo,def){
   const ok=id=>cfg.cats.some(c=>c.id===id&&!c.oculta)?id:'';
   const g=GRUPO_CAT[grupo];if(g&&ok(g))return g;
   const s=sugerir(d);if(s&&catById(s).grupo==='variable')return s;
@@ -542,19 +543,20 @@ function catDeArticulo(d,grupo){
     if(/ (DETERG|LEJIA|FREGONA|BAYETA|ESTROPAJO|SUAVIZ|LAVAVAJ|FRIEGA|BOLSA|PILA |AMBIENTADOR)/.test(n)&&ok('casa'))return 'casa';
     if(/ (CHAMPU|GEL |DENTIF|DESODOR|CEPILLO|COMPRESA|TAMPON|CREMA|JABON)/.test(n)&&ok('farmacia'))return 'farmacia';
   }
-  return ok('super')||ok('extras')||cfg.cats.find(c=>c.grupo==='variable'&&!c.oculta).id;
+  return (def&&catById(def).grupo==='variable'&&ok(def))||ok('super')||ok('extras')||cfg.cats.find(c=>c.grupo==='variable'&&!c.oculta).id;
 }
 function ticketDeTexto(texto,srv){
   const g=srv&&srv.items&&srv.items.length?srv:parseGenerico(texto);
-  const items=g.items.map(i=>({desc:i.producto,importe:r2(i.importe),cat:catDeArticulo(i.producto,i.grupo),on:true}));
+  const comer=comercioDeCompra(texto),porTienda=sugerir(comer);
+  const items=g.items.map(i=>({desc:i.producto,importe:r2(i.importe),cat:catDeArticulo(i.producto,i.grupo,i.grupo?'':porTienda),on:true}));
   const suma=r2(items.reduce((a,i)=>a+i.importe,0));
-  const t={fecha:fechaDeTicket(texto)||hoy(),comercio:comercioDeTicket(texto),items,total:g.total!=null?r2(g.total):suma,modo:'items',cuenta:(cuentaDia()||{}).id,igual:false};
+  const t={fecha:fechaDeTicket(texto)||hoy(),comercio:comer,items,total:g.total!=null?r2(g.total):suma,modo:'items',cuenta:(cuentaDia()||{}).id,igual:false};
   return t;
 }
 const tkSuma=()=>r2(tk.items.filter(i=>i.on).reduce((a,i)=>a+(Number(i.importe)||0),0));
 function tkDuplicado(){
   const s=tkSuma(),t=new Date(tk.fecha).getTime();
-  const por=movs.find(m=>!m.borrado&&m.tipo==='gasto'&&(Math.abs(m.importe-s)<0.01||Math.abs(m.importe-tk.total)<0.01)&&Math.abs(new Date(m.fecha).getTime()-t)<=2*864e5);
+  const por=movs.find(m=>!m.borrado&&m.tipo==='gasto'&&(Math.abs(m.importe-s)<0.01||Math.abs(m.importe-tk.total)<0.01)&&Math.abs(new Date(m.fecha).getTime()-t)<=3*864e5);
   if(por)return catById(por.categoria).nombre+' '+eur(por.importe)+' ('+fechaCorta(por.fecha)+')';
   const ya=movs.find(m=>!m.borrado&&String(m.importKey).startsWith('tk|'+tk.fecha+'|'+s.toFixed(2)));
   return ya?'este mismo ticket, ya guardado':'';
@@ -564,7 +566,7 @@ function pintarTicket(){
   const filas=tk.items.map((i,k)=>'<div class="irow'+(i.on?'':' off')+'"><input type="checkbox"'+(i.on?' checked':'')+' onchange="tk.items['+k+'].on=this.checked;pintarTicket()"><div class="imain">'
     +'<div class="row2" style="grid-template-columns:1fr 92px;margin:0"><input value="'+esc(i.desc)+'" aria-label="Artículo" onchange="tk.items['+k+'].desc=this.value"><input value="'+String(i.importe).replace('.',',')+'" inputmode="decimal" aria-label="Importe" style="text-align:right" onchange="tk.items['+k+'].importe=r2(parseNum(this.value));pintarTicket()"></div>'
     +'<select onchange="tk.items['+k+'].cat=this.value">'+catOptions(i.cat)+'</select></div></div>').join('');
-  $('#sheet').innerHTML='<h2>Ticket'+(tk.comercio?' de '+esc(tk.comercio):'')+'</h2>'
+  $('#sheet').innerHTML='<h2>Ticket'+(tk.comercio?' de '+esc(tk.comercio):'')+'</h2>'+(lec?chipsTipo('ticket'):'')
    +'<div class="row2"><label>Fecha<input type="date" value="'+esc(tk.fecha)+'" onchange="tk.fecha=this.value"></label><label>Comercio<input value="'+esc(tk.comercio)+'" onchange="tk.comercio=this.value"></label></div>'
    +'<div id="tkfilas">'+filas+'</div>'
    +'<p class="small" style="margin:10px 0 4px">Artículos marcados: <b>'+eur(s)+'</b> · Ticket: <b>'+eur(tk.total)+'</b></p>'
@@ -596,9 +598,97 @@ function dupTicket(fecha,importe,tipo,usados){
     if(m.borrado||!String(m.importKey).startsWith('tk|'))continue;
     const k=String(m.importKey).split('#')[0];if(vistos.has(k))continue;vistos.add(k);
     const [,f,tot]=k.split('|');
-    if(!usados.has(k)&&Math.abs(+tot-importe)<0.01&&Math.abs(new Date(f).getTime()-t)<=3*864e5){usados.add(k);return {id:k,categoria:m.categoria,importe:+tot,fecha:f}}
+    if(!usados.has(k)&&Math.abs(+tot-importe)<0.01&&Math.abs(new Date(f).getTime()-t)<=7*864e5){usados.add(k);return {id:k,categoria:m.categoria,importe:+tot,fecha:f}}
   }
   return null;
+}
+/* ---- compra puntual (Amazon, factura, recibo, pago…) y reparto automático ---- */
+let lec=null;
+const NUM_IMP='(\\d{1,3}(?:[.,]\\d{3})*[.,]\\d{2}|\\d+[.,]\\d{2})(?!\\d)';
+function importeDeCompra(texto){
+  const L=String(texto).split(/\r?\n/).map(l=>l.replace(/\u00a0/g,' ').trim()).filter(Boolean);
+  const am=l=>{const m=l.replace(/(\d)\s+(\d{2})(?!\d)/g,'$1,$2').match(new RegExp('(?:EUR|€|\\$)?\\s*'+NUM_IMP+'\\s*(?:EUR|€)?','i'));return m?parseNum(m[1]):0};
+  const FUERTE=/TOTAL (?:DEL )?PEDIDO|TOTAL A PAGAR|IMPORTE TOTAL|TOTAL PAGADO|ORDER TOTAL|GRAND TOTAL|IMPORTE PAGADO|A PAGAR|TOTAL \(IVA|TOTAL FACTURA|TOTAL EUR/i,MALO=/SUBTOTAL|SIN IVA|ANTES DE|ENV[IÍ]O|GASTOS DE|BASE|CUOTA|DESCUENTO|AHORRO/i;
+  let fuerte=0,flojo=0;
+  L.forEach((l,i)=>{
+    if(MALO.test(l)||!/TOTAL|A PAGAR|IMPORTE|PAGADO/i.test(l))return;
+    const v=am(l)||am(L[i+1]||'');if(!(v>0))return;
+    if(FUERTE.test(l)){if(!fuerte)fuerte=v}else if(/TOTAL/i.test(l))flojo=v;
+  });
+  if(fuerte)return fuerte;if(flojo)return flojo;
+  const todos=L.map(am).filter(v=>v>0);return todos.length?Math.max(...todos):0;
+}
+const MARCAS=/AMAZON|ALIEXPRESS|PAYPAL|ZARA|IKEA|DECATHLON|EL CORTE INGLES|LEROY MERLIN|APPLE|GOOGLE|NETFLIX|SPOTIFY|BOLT|UBER|GLOVO|JUST EAT|RYANAIR|VUELING|BOOKING|PCCOMPONENTES|MEDIAMARKT|WALLAPOP|VINTED|TEMU|SHEIN|BIZUM|REVOLUT/i;
+function comercioDeCompra(t){const m=String(t).match(MARCAS);return m?m[0].toLowerCase().replace(/(^|\s)\S/g,s=>s.toUpperCase()):comercioDeTicket(t)}
+const MESES_LARGOS=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function fechaDeCompra(t){
+  const f=fechaDeTicket(t);if(f)return f;
+  const m=String(t).match(/(\d{1,2})\s+de\s+([A-Za-záéíóúÁÉÍÓÚ]+)\s+de\s+(\d{4})/i);
+  if(m){const k=MESES_LARGOS.indexOf(norm(m[2]).toLowerCase());if(k>=0)return numFechaOcr(m[3],k+1,m[1])}
+  const m2=String(t).match(/(\d{1,2})\s+([A-Za-z]{3,10})\.?\s+(\d{4})/);
+  if(m2){const k=MES_ES[norm(m2[2]).slice(0,3)];if(k)return numFechaOcr(m2[3],k,m2[1])}
+  return null;
+}
+/* ¿Qué es lo que han subido? ticket con artículos, captura de movimientos del banco o una compra puntual */
+function tipoDeTexto(texto,srv){
+  const g=srv&&srv.items&&srv.items.length?srv:parseGenerico(texto);
+  const suma=r2(g.items.reduce((a,i)=>a+i.importe,0));
+  const minI=srv&&srv.items&&srv.items.length?2:3;
+  if(g.items.length>=minI&&g.total!=null&&Math.abs(suma-g.total)<0.02)return 'ticket';
+  const L=String(texto).split(/\r?\n/).map(l=>l.trim());
+  const fechas=L.filter(l=>fechaLibre(l)||(/^(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?)\s/.test(l)&&fechaLibre(l.split(/\s/)[0]))).length;
+  const filas=parseBancoTexto(texto).length;
+  if(filas>=2&&fechas>=1&&!/\bTOTAL\b|DESCRIPCI/i.test(texto))return 'banco';
+  if(importeDeCompra(texto)>0&&!(g.items.length>=3&&g.total!=null))return 'compra';
+  if(g.items.length>=2)return 'ticket';
+  return filas>=1&&fechas>=1?'banco':'compra';
+}
+function compraDeTexto(texto){
+  const comercio=comercioDeCompra(texto);
+  return {fecha:fechaDeCompra(texto)||hoy(),comercio,importe:importeDeCompra(texto),tipo:'gasto',nota:'',cat:sugerir(comercio)||sugerir(String(texto).slice(0,300))||'',cuenta:(cuentaDia()||{}).id,igual:false};
+}
+function chipsTipo(actual){
+  return '<p class="small muted" style="margin:0 0 8px">He entendido: <b>'+({ticket:'ticket con artículos',compra:'una compra',banco:'movimientos del banco'})[actual]+'</b>. ¿No es eso? '+['ticket','compra','banco'].filter(t=>t!==actual).map(t=>'<button class="chip" onclick="aplicarLectura(\''+t+'\')">'+({ticket:'Ticket',compra:'Compra',banco:'Banco'})[t]+'</button>').join(' ')+'</p>';
+}
+function aplicarLectura(tipo){
+  const {texto,srv}=lec;lec.tipo=tipo;
+  if(tipo==='banco'){cerrar();bancoDeTexto(texto);return}
+  if(tipo==='ticket'){
+    tk=ticketDeTexto(texto,srv);
+    if(!tk.items.length){toast('No encuentro artículos en esta imagen');if(!cp){cp=compraDeTexto(texto)}pintarCompra();return}
+    pintarTicket();return;
+  }
+  cp=compraDeTexto(texto);pintarCompra();
+}
+let cp=null;
+function pintarCompra(){
+  const dup=yaApuntado(cp.fecha,[cp.importe],7);
+  $('#sheet').innerHTML='<h2>Compra'+(cp.comercio?' en '+esc(cp.comercio):'')+'</h2>'+chipsTipo('compra')
+   +'<div class="seg"><button class="'+(cp.tipo==='gasto'?'on':'')+'" onclick="cp.tipo=\'gasto\';pintarCompra()">➖ Gasto</button><button class="'+(cp.tipo==='ingreso'?'on':'')+'" onclick="cp.tipo=\'ingreso\';pintarCompra()">➕ Ingreso</button></div>'
+   +'<div class="row2"><label>Importe<input inputmode="decimal" value="'+(cp.importe?String(cp.importe).replace('.',','):'')+'" placeholder="0,00" onchange="cp.importe=r2(parseNum(this.value));pintarCompra()"></label><label>Fecha<input type="date" value="'+esc(cp.fecha)+'" onchange="cp.fecha=this.value;pintarCompra()"></label></div>'
+   +'<label>Comercio<input value="'+esc(cp.comercio)+'" onchange="cp.comercio=this.value"></label>'
+   +'<label>Categoría<select onchange="cp.cat=this.value">'+catOptions(cp.cat,true)+'</select></label>'
+   +'<label>Nota (opcional)<input value="'+esc(cp.nota)+'" placeholder="Ej: auriculares" onchange="cp.nota=this.value"></label>'
+   +(cuentasVis().length>1?'<label>Pagado desde<select onchange="cp.cuenta=this.value">'+cuentasVis().map(c=>'<option value="'+esc(c.id)+'"'+(cp.cuenta===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>').join('')+'</select></label>':'')
+   +(dup?'<p class="small" style="color:var(--warn);margin:10px 0 6px">⚠️ Ya tienes: '+esc(dup)+'. Si ya está apuntado, no lo guardes otra vez.</p><label style="display:flex;gap:8px;align-items:center;margin:0 0 8px"><input type="checkbox" style="width:auto"'+(cp.igual?' checked':'')+' onchange="cp.igual=this.checked"> Guardarlo igualmente</label>':'')
+   +'<button class="btn" onclick="guardarCompra()">Guardar</button><button class="btn ghost" onclick="cerrar()">Cancelar</button>';
+  abrir();
+}
+function guardarCompra(){
+  if(!(cp.importe>0)){toast('Escribe el importe');return}
+  if(!cp.cat){toast('Elige una categoría');return}
+  if(yaApuntado(cp.fecha,[cp.importe],7)&&!cp.igual){toast('Parece que ya está apuntado. Marca «Guardarlo igualmente» si es otro.');return}
+  const m=nuevoMov({fecha:cp.fecha,tipo:cp.tipo,importe:cp.importe,categoria:cp.cat,nota:[cp.comercio,cp.nota].filter(Boolean).join(' · '),quien:yo,origen:'captura',importKey:'tk|'+cp.fecha+'|'+cp.importe.toFixed(2)+'#1'});
+  if(cp.cuenta)m.cuenta=cp.cuenta;movs.push(m);
+  saveMovs();programarSync();cerrar();
+  const u=cp.fecha.split('-');vm={y:+u[0],m:+u[1]-1};vista='movs';render();
+  toast('Guardado: '+catById(m.categoria).nombre+' '+eur(m.importe),()=>{updMov(m.id,{borrado:true});render()});
+}
+/* ¿Ya hay algo apuntado con ese importe cerca de esa fecha? (a mano, de un ticket anterior o importado del banco) */
+function yaApuntado(fecha,importes,dias){
+  const t=new Date(fecha).getTime();
+  const por=movs.find(m=>!m.borrado&&importes.some(i=>i>0&&Math.abs(m.importe-i)<0.01)&&Math.abs(new Date(m.fecha).getTime()-t)<=dias*864e5);
+  return por?catById(por.categoria).nombre+' '+eur(por.importe)+' ('+fechaCorta(por.fecha)+')':'';
 }
 /* ---- captura de movimientos del banco ---- */
 const MES_ES={ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,SET:9,OCT:10,NOV:11,DIC:12};
@@ -1276,7 +1366,7 @@ function construirFilas(){
     const catS=sugerir(con);
     const est=(!ya&&!dup&&catS)?movs.find(x=>!x.borrado&&x.origen==='fijo'&&String(x.nota).endsWith(AUTO)&&x.tipo===tipo&&x.categoria===catS&&!usados.has(x.id)&&Math.abs(new Date(x.fecha)-new Date(f))<=21*864e5):null;
     if(est)usados.add(est.id);
-    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con)||(bancoDe(cuentaImp())==='tr'?(/TRANSFER/i.test(con)?'traspaso':/INTER[EÉ]S|INTEREST/i.test(con)?'otros_ing':''):''),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,corrige,reemplaza:est?est.id:'',estTxt:est?eur(est.importe):'',n,pend:esPend,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
+    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con)||(bancoDe(cuentaImp())==='tr'?(/TRANSFER/i.test(con)?'traspaso':/INTER[EÉ]S|INTEREST/i.test(con)?'otros_ing':''):''),key,estado:ya?'ya':dup?'dup':'nuevo',dupMov:dup&&!String(dup.id).startsWith('tk|')?dup.id:'',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,corrige,reemplaza:est?est.id:'',estTxt:est?eur(est.importe):'',n,pend:esPend,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
   });
   imp.filas=out.sort((a,b)=>a.fecha.localeCompare(b.fecha));
 }
@@ -1340,21 +1430,23 @@ function saldoDelExtracto(){
 }
 function importarSeleccion(){
   const sel=imp.filas.filter(f=>f.ok);
+  let ligados=0;imp.filas.filter(f=>f.estado==='dup'&&!f.ok&&f.dupMov).forEach(f=>{const m=movs.find(x=>x.id===f.dupMov);if(m&&!m.importKey){m.importKey=f.key;m.modificado=Date.now();m.pend=true;ligados++}}); // lo ya apuntado a mano queda ligado al movimiento del banco
   const se=saldoDelExtracto();
   const corr=imp.filas.filter(f=>f.corrige);
-  if(!sel.length&&!se&&!corr.length){toast('No hay nada seleccionado');return}
+  if(!sel.length&&!se&&!corr.length&&!ligados){toast('No hay nada seleccionado');return}
   corr.forEach(f=>{const m=movs.find(x=>x.id===f.corrige.id);if(m)Object.assign(m,{importe:f.corrige.importe,tipo:f.corrige.tipo,importKey:f.corrige.key,nota:m.nota||f.corrige.nota,modificado:Date.now(),pend:true})});
   if(corr.length&&!sel.length){saveMovs();programarSync()}
   sel.forEach(f=>{if(f.reemplaza){const e=movs.find(x=>x.id===f.reemplaza);if(e)Object.assign(e,{borrado:true,modificado:Date.now(),pend:true})}});
   const ci=cuentaImp(),antigua=ci&&CLAVE_ANTIGUA[ci.id];
   sel.forEach(f=>{const m=nuevoMov({fecha:f.fecha,tipo:f.tipo,importe:f.importe,categoria:f.cat||(f.tipo==='gasto'?'extras':'otros_ing'),nota:f.concepto,quien:yo,origen:ci&&!antigua?ci.nombre:imp.banco,importKey:f.key});if(ci&&!antigua)m.cuenta=ci.id;movs.push(m)});
   guardarMapa();
-  let msg=sel.length+' movimientos importados'+(corr.length?' · '+corr.length+' corregidos':'');
+  let msg=sel.length+' movimientos importados'+(corr.length?' · '+corr.length+' corregidos':'')+(ligados?' · '+ligados+' ya apuntados enlazados':'');
   if(se){
     const c=cfg.cuentas.find(x=>x.id===se.id);
     if(c&&(!c.fecha||se.fecha>=c.fecha)){c.saldo=se.saldo;c.fecha=se.fecha;c.ts=Date.now()+1;saveCfg();msg+=' · saldo de '+c.nombre+': '+eur(se.saldo)}
   }
   {const c=cuentaImp();if(c&&imp.iban4&&!c.iban4&&!cfg.cuentas.some(x=>x.iban4===imp.iban4)){c.iban4=imp.iban4;saveCfg()}} // la próxima vez reconoce esta cuenta sola
+  if(ligados){saveMovs();programarSync()}
   if(sel.length){saveMovs();programarSync();const ult=sel[sel.length-1].fecha.split('-');vm={y:+ult[0],m:+ult[1]-1};vista='movs'}else vista='resumen';
   imp={banco:imp.banco,raw:null,map:null,filas:[],nombre:'',pdfFin:null};
   render();toast(msg);
