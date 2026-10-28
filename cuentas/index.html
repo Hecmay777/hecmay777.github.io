@@ -486,10 +486,11 @@ function icoCat(c,cls){
   return '<span class="icoc emo'+(cls?' '+cls:'')+'" style="background:'+(c.color||COLORES_LIBRES[h%COLORES_LIBRES.length])+'" aria-hidden="true">'+esc(c.icono||String(c.nombre||'?').slice(0,1))+'</span>';
 }
 function signo(m){const c=catById(m.categoria);if(c.grupo==='neutro')return ['','neu'];const entra=c.grupo==='ingreso'?m.tipo==='ingreso':m.tipo!=='gasto';return entra?['+','pos']:['−','neg']}
+const tieneTicket=m=>m.origen==='Mercadona'&&/^gm_[0-9a-f]+$/i.test(String(m.id));
 function itemMov(m){
   const c=catById(m.categoria);const [s,cls]=signo(m);
   const mc=mesCont(m),otroMes=mc!==String(m.fecha).slice(0,7)?'cuenta para '+MESES[+mc.slice(5,7)-1].toLowerCase():'';
-  const det=[m.nota,fechaCorta(m.fecha),otroMes,m.quien,m.origen&&m.origen!=='manual'?m.origen:''].filter(Boolean).map(esc).join(' · ');
+  const det=[m.nota,fechaCorta(m.fecha),otroMes,m.quien,m.origen&&m.origen!=='manual'?m.origen:'',tieneTicket(m)?'🧾':''].filter(Boolean).map(esc).join(' · ');
   return '<button class="mov" onclick="editar(\''+m.id+'\')">'+icoCat(c,'sm')+'<span class="mt"><b>'+esc(c.nombre)+(m.sub?' · '+esc(m.sub):'')+'</b><small>'+det+'</small></span><span class="amt '+cls+'">'+s+eur(m.importe)+'</span></button>';
 }
 function catOptions(sel,conVacio){
@@ -862,9 +863,28 @@ function editar(id){
    +'<div class="row2"><label>Fecha<input type="date" id="eFecha" value="'+esc(m.fecha)+'"></label><label>Quién<select id="eQuien">'+personasOpts(m.quien)+'</select></label></div>'
    +'<label>Nota<input id="eNota" value="'+esc(m.nota)+'"></label>'
    +'<p class="muted small">Origen: '+esc(m.origen||'manual')+'</p>'
+   +(tieneTicket(m)?'<button class="btn ghost" onclick="verTicket(\''+id+'\')">🧾 Ver ticket</button>':'')
    +'<div class="row2"><button class="btn ghost danger" onclick="borrar(\''+id+'\')">🗑️ Papelera</button><button class="btn" onclick="guardarEdicion(\''+id+'\')">Guardar</button></div>'
    +'<button class="btn ghost" onclick="cerrar()">Cancelar</button>';
   abrir();
+}
+async function verTicket(id){
+  if(!sync.url||!sync.clave){toast('Hace falta tener conectada la hoja de Google (Ajustes)');return}
+  const m=movs.find(x=>x.id===id);
+  $('#sheet').innerHTML='<h2>🧾 Ticket</h2><p class="muted small" id="tkEst">Pidiendo el ticket a Google…</p><div id="tkPags" style="max-height:68vh;overflow:auto;background:#fff;border-radius:10px"></div><button class="btn ghost" style="margin-top:10px" onclick="cerrar()">Cerrar</button>';
+  abrir();
+  try{
+    const j=await llamar({accion:'ticketpdf',id});
+    const lib=await cargarPdfjs();
+    const doc=await lib.getDocument({data:Uint8Array.from(atob(j.pdf),c=>c.charCodeAt(0)),isEvalSupported:false}).promise;
+    for(let n=1;n<=doc.numPages;n++){
+      const cont=$('#tkPags');if(!cont)return;
+      const pg=await doc.getPage(n),v0=pg.getViewport({scale:1}),w=Math.min(cont.clientWidth||340,700),v=pg.getViewport({scale:(w/v0.width)*2});
+      const cv=document.createElement('canvas');cv.width=v.width;cv.height=v.height;cv.style.cssText='width:100%;display:block';cont.appendChild(cv);
+      await pg.render({canvasContext:cv.getContext('2d'),viewport:v}).promise;
+      const t=$('#tkEst');if(t)t.textContent=(m?m.nota+' · '+fechaCorta(m.fecha)+' · '+eur(m.importe):'')+(doc.numPages>1?' · página '+n+' de '+doc.numPages:'');
+    }
+  }catch(e){const t=$('#tkEst');if(t)t.textContent='No he podido abrir el ticket: '+(e&&e.message||e)}
 }
 function guardarEdicion(id){
   const v=parseNum($('#eImp').value);if(!v){toast('Importe no válido');return}
