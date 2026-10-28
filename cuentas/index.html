@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- © 2026 Héctor Mayol. Todos los derechos reservados. Prohibida su copia, modificación o distribución sin autorización escrita del autor. -->
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -1484,7 +1485,8 @@ function vAjustes(){
 
   +'<section class="card"><h2>Copias y Excel</h2><button class="btn ghost" onclick="exportarExcel('+vm.y+')">📊 Descargar Excel de '+vm.y+'</button><button class="btn ghost" onclick="descargarCopia()">💾 Descargar copia completa</button><label class="file" style="padding:14px">♻️ Restaurar una copia<input type="file" accept=".json" onchange="restaurarCopia(this.files[0]);this.value=\'\'"></label></section>'
 
-  +'<section class="card"><details><summary><b>🗑️ Papelera ('+enPapelera.length+')</b></summary>'+(enPapelera.length?enPapelera.sort((a,b)=>b.modificado-a.modificado).slice(0,100).map(m=>'<div class="flex" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span class="small">'+catById(m.categoria).icono+' '+esc(catById(m.categoria).nombre)+' · '+eur(m.importe)+' · '+fechaCorta(m.fecha)+'</span><button class="btn sm ghost" onclick="updMov(\''+m.id+'\',{borrado:false});render()">Recuperar</button></div>').join(''):'<p class="muted small">Vacía.</p>')+'</details></section>';
+  +'<section class="card"><details><summary><b>🗑️ Papelera ('+enPapelera.length+')</b></summary>'+(enPapelera.length?enPapelera.sort((a,b)=>b.modificado-a.modificado).slice(0,100).map(m=>'<div class="flex" style="justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span class="small">'+catById(m.categoria).icono+' '+esc(catById(m.categoria).nombre)+' · '+eur(m.importe)+' · '+fechaCorta(m.fecha)+'</span><button class="btn sm ghost" onclick="updMov(\''+m.id+'\',{borrado:false});render()">Recuperar</button></div>').join(''):'<p class="muted small">Vacía.</p>')+'</details></section>'
+  +'<p class="small muted" style="text-align:center;margin:18px 0 6px">Cuentas de Casa · © 2026 Héctor Mayol. Todos los derechos reservados.</p>';
 }
 function renombrarPersona(i,v){v=String(v||'').trim();const ant=cfg.personas[i];if(!v||v===ant||cfg.personas.includes(v)){render();return}cfg.personas[i]=v;if(yo===ant){yo=v;store.set('cc_yo',v)}saveCfg();render();toast('Nombre cambiado')}
 function setYo(p){yo=p;store.set('cc_yo',p);form.quien='';render()}
