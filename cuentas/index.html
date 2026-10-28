@@ -1733,7 +1733,9 @@ async function sincronizar(manual){
   try{
     const enviar=movs.filter(m=>m.pend).map(m=>{const c=Object.assign({},m);delete c.pend;return c});
     const primera=!sync.desde;
-    const j=await llamar({accion:'sync',desde:sync.desde||0,movs:enviar,cfg:primera?null:cfg});
+    const completa=!sync.v2; // una vez tras actualizar: baja todo de nuevo por si algún apunte automático se quedó sin llegar
+    const desde=completa?0:Math.max(0,(sync.desde||0)-15*60*1000); // margen de 15 min: los tickets automáticos tardan en escribirse
+    const j=await llamar({accion:'sync',desde:desde,movs:enviar,cfg:primera?null:cfg});
     const enviados=new Map(enviar.map(m=>[m.id,m.modificado]));
     movs.forEach(m=>{if(m.pend&&enviados.get(m.id)===m.modificado)m.pend=false});
     (j.movs||[]).forEach(r=>{
@@ -1745,7 +1747,7 @@ async function sincronizar(manual){
     });
     if(primera&&!j.cfg)programarSync(); // hoja nueva: en la siguiente vuelta se guarda esta configuración
     if(j.cfg&&(primera||(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0))){cfg=asegurarCats(j.cfg);store.set('cc_cfg',cfg);if(!cfg.personas.includes(yo)&&!store.get('cc_yo',null))yo=cfg.personas[0]}
-    sync.desde=j.ahora;sync.ultimaOk=Date.now();sync.error='';mercaCache={};
+    sync.desde=j.ahora;sync.v2=1;sync.ultimaOk=Date.now();sync.error='';mercaCache={};
     store.set('cc_sync',sync);saveMovs();
     if(!syncSesion){syncSesion=true;try{generarFijos()}catch(e){}}
     if(manual)toast('☁️ Todo guardado en la nube');
