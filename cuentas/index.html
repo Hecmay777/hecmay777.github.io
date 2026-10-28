@@ -52,6 +52,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:15.5
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .mov{display:flex;align-items:center;gap:12px;width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:10px 2px;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
 .mov:last-child{border-bottom:0}
+.cta{border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0}.ctan{font-weight:700;font-size:17.5px}
 .icoc{width:58px;height:58px;border-radius:50%;display:inline-grid;place-items:center;flex:none;color:#fff}
 .icoc svg{width:56%;height:56%;fill:none;stroke:#fff;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .icoc.emo{font-size:27px}.icoc.sm{width:40px;height:40px}.icoc.sm.emo{font-size:18.5px}.icoc.xs{width:24px;height:24px;vertical-align:-7px;margin-right:6px}.icoc.xs.emo{font-size:14.5px}
@@ -248,7 +249,7 @@ function defaultCfg(){
       {id:uid(),nombre:'Gasolina',importe:null,cat:'gasolina'},
       {id:uid(),nombre:'Parking',importe:null,cat:'parking'}
     ],
-    cuentas:[{id:'bankinter',nombre:'Cuenta de casa',tipo:'dia',saldo:null,fecha:'',ts:0},{id:'bankinter_h',nombre:'Cuenta personal',tipo:'personal',saldo:null,fecha:'',ts:0},{id:'tr',nombre:'Ahorro',tipo:'ahorro',saldo:null,fecha:'',ts:0}],
+    cuentas:[{id:'k_casa',nombre:'Cuenta de casa',tipo:'dia',banco:'otro',persona:'',saldo:null,fecha:'',ts:0}],
     nominaSig:{dia:20},
     personas:['Persona 1','Persona 2'],
     modificado:0
@@ -270,7 +271,7 @@ function asegurarCats(c){
   if(!c.nominaSig){c.nominaSig={dia:20};cambio=true}
   if((Number(c.fijosV)||0)<2){c.fijosV=2;cambio=true}
   if(!Array.isArray(c.cuentas))c.cuentas=[];
-  defaultCfg().cuentas.forEach((d,i)=>{if(!c.cuentas.some(x=>x.id===d.id)){c.cuentas.splice(Math.min(i,c.cuentas.length),0,d);cambio=true}});
+  if(!c.cuentas.length){c.cuentas=defaultCfg().cuentas;cambio=true} // las cuentas ya las gestiona cada uno
   if(!Array.isArray(c.reglas))c.reglas=[];
   if(!Array.isArray(c.personas)||!c.personas.length){c.personas=defaultCfg().personas;cambio=true}
   if(cambio){c.modificado=(Number(c.modificado)||0)+1;store.set('cc_cfg',c)}
@@ -286,6 +287,7 @@ let modoRes='mes';
 let form={tipo:'gasto',cat:null,sub:'',imp:'',nota:'',fecha:'',quien:''};
 let filtroTxt='',filtroCat='';
 let imp={banco:'Bankinter',raw:null,map:null,filas:[],nombre:''};
+setTimeout(()=>{if(!cuentaImp()){const c=cuentaDia();if(c)imp.banco=claveImp(c)}},0);
 
 const saveMovs=()=>store.set('cc_movs',movs);
 function saveCfg(){cfg.modificado=Date.now();store.set('cc_cfg',cfg);programarSync()}
@@ -322,8 +324,40 @@ function calc(list){
 }
 
 /* ===================== navegación y render ===================== */
+
+/* ===================== BIENVENIDA (solo la primera vez, en un móvil sin datos) ===================== */
+let bienv=!store.get('cc_cfg',null)&&!store.get('cc_movs',[]).length&&!(store.get('cc_sync',{}).url)&&!store.get('cc_bienvenida',null);
+let bPaso=0;
+function vBienvenida(){
+  const pasos=4,punto=i=>'<i style="display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 3px;background:'+(i===bPaso?'var(--brand)':'var(--line)')+'"></i>';
+  const pie=(atras,sig,txt)=>'<div class="row2" style="margin-top:16px">'+(atras?'<button class="btn ghost" onclick="bPaso--;render()">Atrás</button>':'<span></span>')+'<button class="btn" onclick="'+sig+'">'+(txt||'Siguiente')+'</button></div><p style="text-align:center;margin-top:12px">'+[0,1,2,3].map(punto).join('')+'</p>';
+  if(bPaso===0)return '<section class="card" style="text-align:center;padding:28px 18px"><img src="icon2-192.png" alt="" width="88" height="88" style="border-radius:22px"><h2 style="font-size:24px;margin:14px 0 6px">Cuentas de Casa</h2><p class="muted">Apunta vuestros gastos en segundos y mira de un vistazo cuánto os queda hasta fin de mes.</p><button class="btn" style="margin-top:18px" onclick="bPaso=1;render()">Empezar</button><button class="btn ghost" onclick="finBienvenida(\'nube\')">Ya la uso: conectar mi hoja de Google</button></section>';
+  if(bPaso===1)return '<section class="card"><h2>¿Quién la va a usar?</h2><p class="muted small">Los apuntes se marcan con el nombre de quien los hace.</p><label>Tu nombre<input id="bP1" value="'+esc(cfg.personas[0]==='Persona 1'?'':cfg.personas[0])+'" placeholder="Ej: Jorge"></label><label>La otra persona (opcional)<input id="bP2" value="'+esc(cfg.personas[1]&&cfg.personas[1]!=='Persona 2'?cfg.personas[1]:'')+'" placeholder="Ej: Andrea"></label>'+pie(false,'bNombres()')+'</section>';
+  if(bPaso===2)return '<section class="card"><h2>Vuestras cuentas</h2><p class="muted small">La de <b>día a día</b> es de donde salen los gastos de casa. Puedes añadir más ahora o luego en Ajustes.</p>'
+    +cuentasVis().map(c=>'<div class="cta"><input class="ctan" value="'+esc(c.nombre)+'" aria-label="Nombre de la cuenta" onchange="setCuenta(\''+c.id+'\',\'nombre\',this.value)"><div class="row2"><label>Tipo<select onchange="setCuenta(\''+c.id+'\',\'tipo\',this.value)">'+Object.entries(TIPOS_CUENTA).map(([v,t])=>'<option value="'+v+'"'+(c.tipo===v?' selected':'')+'>'+t+'</option>').join('')+'</select></label><label>Banco<select onchange="setCuenta(\''+c.id+'\',\'banco\',this.value)">'+Object.entries(BANCOS).map(([v,t])=>'<option value="'+v+'"'+(bancoDe(c)===v?' selected':'')+'>'+t+'</option>').join('')+'</select></label></div>'+(cuentasVis().length>1?'<button class="x" style="font-size:15px;margin-top:6px" onclick="quitarCuenta(\''+c.id+'\')">Quitar</button>':'')+'</div>').join('')
+    +'<button class="btn ghost" onclick="nuevaCuenta({tipo:\'ahorro\',nombre:\'Ahorro\'})">+ Añadir otra cuenta</button>'+pie(true,'bPaso=3;render()')+'</section>';
+  return '<section class="card"><h2>¿Cuánto hay hoy?</h2><p class="muted small">Mira el saldo en la app del banco y escríbelo. Desde aquí la app lleva la cuenta sola. Si no lo sabes ahora, déjalo en blanco.</p>'
+    +cuentasVis().map(c=>'<label>'+esc(c.nombre)+'<input id="bs_'+c.id+'" inputmode="decimal" placeholder="Ej: 1.250,00" value="'+(c.saldo!=null?String(c.saldo).replace('.',','):'')+'"></label>').join('')
+    +pie(true,'bSaldos()','Terminar')+'<p class="muted small" style="margin-top:4px">Los datos se guardan en este móvil. Para tener copia y compartirlos entre dos móviles, conecta una hoja de Google en Ajustes.</p></section>';
+}
+function bNombres(){
+  const a=String($('#bP1').value||'').trim(),b=String($('#bP2').value||'').trim();
+  if(!a){toast('Escribe tu nombre');return}
+  cfg.personas=b?[a,b]:[a];yo=a;store.set('cc_yo',a);saveCfg();bPaso=2;render();
+}
+function bSaldos(){
+  cuentasVis().forEach(c=>{const el=$('#bs_'+c.id);if(el&&el.value.trim()){c.saldo=r2(parseNum(el.value));c.fecha=hoy();c.ts=Date.now()}});
+  saveCfg();finBienvenida();
+}
+function finBienvenida(a){
+  store.set('cc_bienvenida','hecha');bienv=false;
+  if(a==='nube'){vista='ajustes';render();setTimeout(()=>{const x=[...document.querySelectorAll('#app h2')].find(h=>/nube/i.test(h.textContent));if(x)x.scrollIntoView()},50);toast('Pega aquí la dirección de tu hoja y tu clave')}
+  else{vista='apuntar';render();toast('¡Listo! Ya puedes apuntar tu primer gasto')}
+}
 function ir(v){vista=v;render();window.scrollTo(0,0)}
 function render(sinGuardarForm){
+  if(bienv){$('#app').innerHTML=vBienvenida();document.querySelector('.nav').style.display='none';return}
+  document.querySelector('.nav').style.display='';
   try{generarFijos()}catch(e){}
   if(!sinGuardarForm&&vista==='apuntar'&&$('#fImp'))leerForm();
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===vista));
@@ -563,19 +597,32 @@ function pendientesFijos(y,m,t){
     return Object.assign({},f,{sugerido:imp});
   });
 }
-/* Nombre en pantalla de cada «banco» del importador (los valores internos no cambian) */
-const BANCO_CUENTA={'Bankinter':'bankinter','Bankinter Héctor':'bankinter_h','Trade Republic':'tr'};
-function esDeCuentaPersonal(titular){
-  const pal=c=>c?norm(c.nombre).split(/[^A-Z0-9]+/).filter(w=>w.length>=4):[];
-  const p=pal(cfg.cuentas.find(c=>c.tipo==='personal')),d=pal(cfg.cuentas.find(c=>c.tipo==='dia'));
-  const t=norm(titular),propias=(a,b)=>a.filter(w=>!b.includes(w));
-  return propias(p,d).some(w=>t.includes(w))&&!propias(d,p).some(w=>t.includes(w));
+/* ===================== CUENTAS ===================== */
+/* Las tres primeras cuentas guardan su clave antigua en los apuntes importados (para no duplicar al reimportar) */
+const CLAVE_ANTIGUA={bankinter:'Bankinter',bankinter_h:'Bankinter Héctor',tr:'Trade Republic'};
+const BANCOS={bankinter:'Bankinter',tr:'Trade Republic',otro:'Otro banco'};
+const TIPOS_CUENTA={dia:'Día a día',personal:'Personal',ahorro:'Ahorro'};
+const cuentasVis=()=>cfg.cuentas.filter(c=>!c.oculta);
+const claveImp=c=>CLAVE_ANTIGUA[c.id]||c.id;
+const bancoDe=c=>c?(c.banco||{bankinter:'bankinter',bankinter_h:'bankinter',tr:'tr'}[c.id]||'otro'):'otro';
+const cuentaPorClave=k=>cfg.cuentas.find(c=>claveImp(c)===k)||null;
+const cuentaImp=()=>cuentaPorClave(imp.banco);
+const cuentaDia=()=>cuentasVis().find(c=>c.tipo==='dia')||cfg.cuentas.find(c=>c.tipo==='dia')||cfg.cuentas[0];
+const BANCO_CUENTA=new Proxy({},{get:(o,k)=>{const c=cuentaPorClave(k);return c?c.id:undefined}});
+/* ¿De qué cuenta es este extracto? Por el nombre del titular: palabras propias del nombre de cada cuenta y de su dueño */
+function cuentaPorTitular(titular,banco){
+  const cand=cuentasVis().filter(c=>bancoDe(c)===banco);if(!cand.length)return null;
+  const pal=c=>norm(c.nombre+' '+(c.persona||'')).split(/[^A-Z0-9]+/).filter(w=>w.length>=4);
+  const t=norm(titular),todas=cand.map(pal);
+  const encaja=cand.filter((c,i)=>pal(c).filter(w=>!todas.some((o,j)=>j!==i&&o.includes(w))).some(w=>t.includes(w)));
+  return encaja.length===1?encaja[0]:(cand.find(c=>c.tipo==='dia')||cand[0]);
 }
-function nombreBanco(b){const c=cfg.cuentas.find(x=>x.id===BANCO_CUENTA[b]);return c?c.nombre:b}
+function esDeCuentaPersonal(titular){const c=cuentaPorTitular(titular,'bankinter');return !!c&&c.tipo==='personal'}
+function nombreBanco(b){const c=cuentaPorClave(b);return c?c.nombre:b}
 /* ===================== SALDO Y LO QUE QUEDA ===================== */
 /* De qué cuenta sale cada apunte: todo es de la cuenta de casa salvo lo importado de otras cuentas y la pensión (cuenta personal) */
-const cuentaCat=cat=>cat==='pension'?'bankinter_h':'bankinter';
-const cuentaDe=m=>m.origen==='Trade Republic'?'tr':m.origen==='Bankinter Héctor'?'bankinter_h':m.origen==='Bankinter'?'bankinter':cuentaCat(m.categoria);
+const cuentaCat=cat=>cat==='pension'&&cfg.cuentas.some(c=>c.id==='bankinter_h')?'bankinter_h':(cuentaDia()||{}).id;
+const cuentaDe=m=>{if(m.cuenta&&cfg.cuentas.some(c=>c.id===m.cuenta))return m.cuenta;const c=cuentaPorClave(m.origen);return c?c.id:cuentaCat(m.categoria)};
 function saldoCuenta(c){
   if(!c||c.saldo===null||c.saldo===undefined||c.saldo==='')return null;
   let s=Number(c.saldo)||0;
@@ -590,10 +637,10 @@ function saldoCuenta(c){
 }
 function quedaMes(){
   const d=new Date(),y=d.getFullYear(),m=d.getMonth();
-  const bk=cfg.cuentas.find(c=>c.tipo==='dia');
+  const bk=cuentaDia();
   if(saldoCuenta(bk)===null)return null;
   // Dinero para el mes: la cuenta de casa + las cuentas personales (de ahí se pasa a casa); el ahorro va aparte
-  const incl=cfg.cuentas.filter(c=>(c.tipo==='dia'||c.tipo==='personal')&&saldoCuenta(c)!==null);
+  const incl=cuentasVis().filter(c=>(c.tipo==='dia'||c.tipo==='personal')&&saldoCuenta(c)!==null);
   const ids=new Set(incl.map(c=>c.id));
   const partes=incl.map(c=>({nombre:c.nombre,saldo:saldoCuenta(c)}));
   const saldo=r2(partes.reduce((a,x)=>a+x.saldo,0));
@@ -610,7 +657,8 @@ function quedaMes(){
   const gastado=Math.max(0,t.gastos);
   const total=gastado+Math.max(queda,0);
   const pref=y+'-'+pad(m+1);
-  const delAhorro=r2(movs.filter(x=>!x.borrado&&cuentaDe(x)==='tr'&&x.tipo==='gasto'&&String(x.fecha).startsWith(pref)).reduce((a,x)=>a+x.importe,0));
+  const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
+  const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&String(x.fecha).startsWith(pref)).reduce((a,x)=>a+x.importe,0));
   return {cuenta:bk,partes,saldo,fijos,sinImporte,queda,dias,delAhorro,porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:d.getDate()/fin};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
@@ -637,7 +685,7 @@ function tarjetaSaldo(compacta){
   const ring=anilloQueda(q,col,compacta?168:132,centro);
   const cab='<div style="display:flex;align-items:center;gap:14px">'+ring+'<div style="min-width:0;flex:1"><div style="font-weight:600;color:'+col+'">'+aviso+'</div><div class="small muted" style="margin-top:4px">'+(q.queda<0?'Faltan '+eur(-q.queda)+' para los recibos.':'Quedan '+q.dias+' día'+(q.dias>1?'s':'')+' de mes.')+'</div></div></div>';
   if(compacta)return '<section class="card anillo" role="button" aria-label="Ver el detalle de lo que queda" onclick="modoRes=\'mes\';vm={y:new Date().getFullYear(),m:new Date().getMonth()};ir(\'resumen\')">'+ring+'</section>';
-  const tr=cfg.cuentas.find(c=>c.tipo==='ahorro'),st=saldoCuenta(tr);
+  const tr=cuentasVis().find(c=>c.tipo==='ahorro'&&saldoCuenta(c)!==null),st=saldoCuenta(tr);
   const linea=(a,b,extra)=>'<div class="bhead" style="padding:4px 0"><span>'+a+'</span><span'+(extra||'')+'>'+b+'</span></div>';
   return '<section class="card"><h2>💶 Lo que os queda este mes</h2>'+cab+'<div style="height:10px"></div>'
    +q.partes.map(x=>linea('Saldo de '+esc(x.nombre)+' ahora',eur(x.saldo))).join('')
@@ -647,6 +695,29 @@ function tarjetaSaldo(compacta){
    +(q.delAhorro>0?'<p class="small" style="margin-top:8px;color:var(--warn)"><b>⚠️ Sacado del ahorro este mes: '+eur(q.delAhorro)+'</b>. Es dinero que en principio no se toca.</p>':'')
    +(st!==null?'<p class="small muted" style="margin-top:8px">🏦 Ahorro en '+esc(tr.nombre)+': <b>'+eur(st)+'</b></p>':'')
    +'<p class="small muted">Saldo puesto el '+fechaCorta(q.cuenta.fecha)+'. <a href="#" onclick="ir(\'ajustes\');return false">Actualizar</a></p></section>';
+}
+function seccionCuentas(){
+  const opts=(o,sel)=>Object.entries(o).map(([v,t])=>'<option value="'+v+'"'+(sel===v?' selected':'')+'>'+t+'</option>').join('');
+  const quien=c=>'<option value="">Los dos</option>'+cfg.personas.map(p=>'<option'+(c.persona===p?' selected':'')+'>'+esc(p)+'</option>').join('');
+  return '<section class="card"><h2>🏦 Cuentas y saldos</h2><p class="muted small" style="margin-top:-4px">Escribe el saldo que ves hoy en el banco; desde ahí la app suma y resta sola. Al importar un extracto con saldo se corrige solo.<br><b>Día a día</b>: de donde salen los gastos de casa. <b>Personal</b>: cuenta de uno, también cuenta para el mes. <b>Ahorro</b>: no se toca; avisa si sale dinero.</p>'
+   +cuentasVis().map(c=>{const s=saldoCuenta(c);const id=c.id;return '<div class="cta"><input class="ctan" value="'+esc(c.nombre)+'" aria-label="Nombre de la cuenta" onchange="setCuenta(\''+id+'\',\'nombre\',this.value)">'
+     +'<div class="row2"><label>Tipo<select onchange="setCuenta(\''+id+'\',\'tipo\',this.value)">'+opts(TIPOS_CUENTA,c.tipo)+'</select></label><label>Banco<select onchange="setCuenta(\''+id+'\',\'banco\',this.value)">'+opts(BANCOS,bancoDe(c))+'</select></label></div>'
+     +'<label>De quién<select onchange="setCuenta(\''+id+'\',\'persona\',this.value)">'+quien(c)+'</select></label>'
+     +(s!==null?'<p class="small" style="margin:10px 0 4px">Saldo ahora: <b>'+eur(s)+'</b> <span class="muted">(puesto el '+fechaCorta(c.fecha)+')</span></p>':'<p class="small muted" style="margin:10px 0 4px">Sin saldo todavía.</p>')
+     +'<div class="row2"><input id="sal_'+id+'" inputmode="decimal" placeholder="Saldo de hoy"><button class="btn sm" style="margin:4px 0 0" onclick="ponerSaldo(\''+id+'\')">Guardar saldo</button></div>'
+     +(cuentasVis().length>1?'<button class="x" style="font-size:15px;margin-top:6px" onclick="quitarCuenta(\''+id+'\')">Quitar esta cuenta</button>':'')+'</div>'}).join('')
+   +'<button class="btn ghost" onclick="nuevaCuenta()">+ Añadir cuenta</button></section>';
+}
+function setCuenta(id,k,v){const c=cfg.cuentas.find(x=>x.id===id);if(!c)return;v=k==='nombre'?String(v).trim()||c.nombre:v;c[k]=v;saveCfg();render()}
+function nuevaCuenta(datos){
+  const c=Object.assign({id:'k_'+uid().slice(0,8),nombre:'Cuenta nueva',tipo:'dia',banco:'otro',persona:'',saldo:null,fecha:'',ts:0},datos||{});
+  cfg.cuentas.push(c);saveCfg();render();return c;
+}
+function quitarCuenta(id){
+  const c=cfg.cuentas.find(x=>x.id===id);if(!c)return;
+  const usada=movs.some(m=>!m.borrado&&cuentaDe(m)===id);
+  if(usada)c.oculta=true;else cfg.cuentas=cfg.cuentas.filter(x=>x.id!==id);
+  saveCfg();render();toast(c.nombre+' quitada'+(usada?' (sus apuntes se conservan)':''),()=>{if(usada)c.oculta=false;else cfg.cuentas.push(c);saveCfg();render()});
 }
 function ponerSaldo(id){
   const c=cfg.cuentas.find(x=>x.id===id);const el=$('#sal_'+id);
@@ -810,19 +881,33 @@ async function leerArchivo(f){
   rows=rows.filter(r=>Array.isArray(r));
   const tc=trCSV(rows);
   if(tc){
-    imp.banco='Trade Republic';imp.raw=tc;imp.nombre=f.name;imp.pdfFin=null;imp.map=detectar(imp.raw);construirFilas();render();
-    toast('Trade Republic: '+(tc.length-1)+' movimientos (intereses ya sin la retención)');
+    {const c=cuentaImp();imp.banco=bancoDe(c)==='tr'?imp.banco:claveImp(cuentasVis().find(x=>bancoDe(x)==='tr')||c||cuentaDia())}imp.raw=tc;imp.nombre=f.name;imp.pdfFin=null;imp.map=detectar(imp.raw);construirFilas();render();
+    toast(nombreBanco(imp.banco)+': '+(tc.length-1)+' movimientos (intereses ya sin la retención)');
     return;
   }
   const bx=bankinterExcel(rows);
   if(bx){
     const c=cfg.cuentas.find(x=>x.iban4&&x.iban4===bx.iban4);
-    imp.banco=c?(c.id==='bankinter_h'?'Bankinter Héctor':c.id==='tr'?'Trade Republic':'Bankinter'):(imp.banco==='Bankinter Héctor'?'Bankinter Héctor':'Bankinter');
+    imp.banco=c?claveImp(c):(bancoDe(cuentaImp())==='bankinter'?imp.banco:claveImp(cuentasVis().find(x=>bancoDe(x)==='bankinter')||cuentaImp()||cuentaDia()));
     imp.iban4=bx.iban4||'';imp.raw=bx.filas;imp.nombre=f.name;imp.pdfFin=bx.fin;imp.map=detectar(imp.raw);construirFilas();render();
     toast((c?c.nombre:'Bankinter')+': '+(bx.filas.length-1)+' movimientos'+(bx.pend?' ('+bx.pend+' pendientes)':''));
     return;
   }
-  imp.raw=rows;imp.nombre=f.name;imp.pdfFin=null;imp.map=detectar(imp.raw);construirFilas();render();
+  imp.raw=rows;imp.nombre=f.name;imp.pdfFin=null;imp.map=detectar(imp.raw);aplicarMapa();construirFilas();render();
+}
+/* Columnas de bancos que la app no conoce: se recuerdan por cuenta, así solo hay que elegirlas la primera vez */
+function aplicarMapa(){
+  const c=cuentaImp();if(!c||!c.mapa||!imp.raw||!imp.map||imp.map.h<0)return;
+  const head=(imp.raw[imp.map.h]||[]).map(x=>String(x??'').trim());
+  const col=n=>n?head.indexOf(n):-1;
+  if(col(c.mapa.fecha)<0)return;
+  ['fecha','concepto','importe','cargo','abono','saldo'].forEach(k=>{if(k in c.mapa)imp.map[k]=c.mapa[k]?col(c.mapa[k]):-1});
+}
+function guardarMapa(){
+  const c=cuentaImp();if(!c||bancoDe(c)!=='otro'||imp.pdfFin||!imp.map||imp.map.h<0)return;
+  const head=(imp.raw[imp.map.h]||[]).map(x=>String(x??'').trim());const n=i=>i>=0&&head[i]?head[i]:'';
+  const m={fecha:n(imp.map.fecha),concepto:n(imp.map.concepto),importe:n(imp.map.importe),cargo:n(imp.map.cargo),abono:n(imp.map.abono),saldo:n(imp.map.saldo??-1)};
+  if(JSON.stringify(m)!==JSON.stringify(c.mapa||{})){c.mapa=m;saveCfg()}
 }
 /* CSV de Trade Republic: usa el importe que entra de verdad (después de comisiones y retención de Hacienda) */
 function trCSV(rows){
@@ -959,13 +1044,13 @@ async function leerPdf(f){
   }catch(e){toast('No he podido abrir el PDF. Revisa la conexión e inténtalo otra vez.');return}
   const todo=items.map(i=>i.s).join(' ').toUpperCase();
   let banco,res;
-  if(todo.includes('TRADE REPUBLIC')){banco='Trade Republic';const filas=pdfTradeRepublic(items);const ult=filas.slice(1).filter(r=>r[3]!==null).reduce((a,r)=>!a||r[0]>=a[0]?r:a,null);res={filas,fin:ult?{fecha:ult[0],saldo:ult[3]}:null}}
+  if(todo.includes('TRADE REPUBLIC')){banco=claveImp(cuentasVis().find(x=>bancoDe(x)==='tr')||cuentaImp()||cuentaDia());const filas=pdfTradeRepublic(items);const ult=filas.slice(1).filter(r=>r[3]!==null).reduce((a,r)=>!a||r[0]>=a[0]?r:a,null);res={filas,fin:ult?{fecha:ult[0],saldo:ult[3]}:null}}
   else if(todo.includes('BKBKESMM')||todo.includes('BANKINTER')){
     // ¿De quién es la cuenta? Miramos el nombre que va debajo de «Titulares»
     const ti=items.find(i=>/^Titulares$/i.test(i.s.trim()));
     const tit=ti?items.filter(i=>i.p===ti.p&&Math.abs(i.x-ti.x)<6&&i.y<ti.y&&ti.y-i.y<14).map(i=>i.s.toUpperCase()).join(' '):'';
-    banco=esDeCuentaPersonal(tit)?'Bankinter Héctor':'Bankinter';res=pdfBankinter(items)}
-  else{toast('Este PDF no lo reconozco. Por ahora leo los de Bankinter y Trade Republic.');return}
+    banco=claveImp(cuentaPorTitular(tit,'bankinter')||cuentaImp()||cuentaDia());res=pdfBankinter(items)}
+  else{toast('Este PDF no lo reconozco. Descarga el extracto en Excel o CSV desde la web de tu banco y súbelo.');return}
   if(res.filas.length<2){toast('No encuentro movimientos en este PDF');return}
   imp.banco=banco;imp.raw=res.filas;imp.nombre=f.name;imp.pdfFin=res.fin;imp.map=detectar(imp.raw);construirFilas();render();
   toast(nombreBanco(banco)+': '+(res.filas.length-1)+' movimientos leídos');
@@ -1014,13 +1099,13 @@ function construirFilas(){
     const catS=sugerir(con);
     const est=(!ya&&!dup&&catS)?movs.find(x=>!x.borrado&&x.origen==='fijo'&&String(x.nota).endsWith(AUTO)&&x.tipo===tipo&&x.categoria===catS&&!usados.has(x.id)&&Math.abs(new Date(x.fecha)-new Date(f))<=21*864e5):null;
     if(est)usados.add(est.id);
-    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con)||(imp.banco==='Trade Republic'?(/TRANSFER/i.test(con)?'traspaso':/INTER[EÉ]S|INTEREST/i.test(con)?'otros_ing':''):''),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,corrige,reemplaza:est?est.id:'',estTxt:est?eur(est.importe):'',n,pend:esPend,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
+    out.push({fecha:f,concepto:con,importe:Math.abs(r2(v)),tipo,cat:sugerir(con)||(bancoDe(cuentaImp())==='tr'?(/TRANSFER/i.test(con)?'traspaso':/INTER[EÉ]S|INTEREST/i.test(con)?'otros_ing':''):''),key,estado:ya?'ya':dup?'dup':'nuevo',dupTxt:dup?catById(dup.categoria).nombre+' '+eur(dup.importe)+' ('+fechaCorta(dup.fecha)+')':'',ok:!ya&&!dup,corrige,reemplaza:est?est.id:'',estTxt:est?eur(est.importe):'',n,pend:esPend,saldo:colS>=0&&String(r[colS]??'').trim()!==''?r2(parseNum(r[colS])):null});
   });
   imp.filas=out.sort((a,b)=>a.fecha.localeCompare(b.fecha));
 }
 function vImportar(){
   let h='<section class="card"><h2>Importar extracto del banco</h2><p class="muted small" style="margin-top:-4px">Sube el extracto del banco en <b>PDF, Excel o CSV</b> (Bankinter y Trade Republic en PDF se leen directamente). La app reconoce las tiendas, te pregunta las que no conoce y avisa si un gasto ya lo habías apuntado a mano.</p>'
-   +'<label>Banco<select onchange="imp.banco=this.value;if(imp.raw){construirFilas();render()}">'+[['Bankinter',nombreBanco('Bankinter')],['Bankinter Héctor',nombreBanco('Bankinter Héctor')],['Trade Republic',nombreBanco('Trade Republic')],['Otro','Otra cuenta']].map(([v,t])=>'<option value="'+v+'"'+(imp.banco===v?' selected':'')+'>'+t+'</option>').join('')+'</select></label>'
+   +'<label>Cuenta<select onchange="imp.banco=this.value;if(imp.raw){aplicarMapa();construirFilas();render()}">'+cuentasVis().map(c=>[claveImp(c),c.nombre]).concat([['Otro','Otra cuenta (sin saldo)']]).map(([v,t])=>'<option value="'+esc(v)+'"'+(imp.banco===v?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select></label>'
    +'<label class="file">📄 '+(imp.nombre?esc(imp.nombre)+' · elegir otro':'Elegir archivo del extracto')+'<input type="file" accept=".csv,.xls,.xlsx,.txt,.pdf" onchange="leerArchivo(this.files[0]);this.value=\'\'"></label></section>';
   if(!imp.raw)return h;
   const cols=(imp.raw[Math.max(imp.map.h,0)]||[]).map((x,i)=>imp.map.h>=0&&String(x).trim()?String(x).trim():'Columna '+(i+1));
@@ -1061,7 +1146,7 @@ function cambiarCatImp(i,v){
 }
 /* Saldo de la cuenta al final del extracto (el del movimiento más reciente) */
 function saldoDelExtracto(){
-  const id={'Bankinter':'bankinter','Bankinter Héctor':'bankinter_h','Trade Republic':'tr'}[imp.banco];
+  const id=(cuentaImp()||{}).id;
   if(id&&imp.pdfFin)return {id,saldo:imp.pdfFin.saldo,fecha:imp.pdfFin.fecha};
   const conS=imp.filas.filter(f=>f.saldo!==null&&f.saldo!==undefined);
   if(!id||!conS.length)return null;
@@ -1084,13 +1169,15 @@ function importarSeleccion(){
   corr.forEach(f=>{const m=movs.find(x=>x.id===f.corrige.id);if(m)Object.assign(m,{importe:f.corrige.importe,tipo:f.corrige.tipo,importKey:f.corrige.key,nota:m.nota||f.corrige.nota,modificado:Date.now(),pend:true})});
   if(corr.length&&!sel.length){saveMovs();programarSync()}
   sel.forEach(f=>{if(f.reemplaza){const e=movs.find(x=>x.id===f.reemplaza);if(e)Object.assign(e,{borrado:true,modificado:Date.now(),pend:true})}});
-  sel.forEach(f=>movs.push(nuevoMov({fecha:f.fecha,tipo:f.tipo,importe:f.importe,categoria:f.cat||(f.tipo==='gasto'?'extras':'otros_ing'),nota:f.concepto,quien:yo,origen:imp.banco,importKey:f.key})));
+  const ci=cuentaImp(),antigua=ci&&CLAVE_ANTIGUA[ci.id];
+  sel.forEach(f=>{const m=nuevoMov({fecha:f.fecha,tipo:f.tipo,importe:f.importe,categoria:f.cat||(f.tipo==='gasto'?'extras':'otros_ing'),nota:f.concepto,quien:yo,origen:ci&&!antigua?ci.nombre:imp.banco,importKey:f.key});if(ci&&!antigua)m.cuenta=ci.id;movs.push(m)});
+  guardarMapa();
   let msg=sel.length+' movimientos importados'+(corr.length?' · '+corr.length+' corregidos':'');
   if(se){
     const c=cfg.cuentas.find(x=>x.id===se.id);
     if(c&&(!c.fecha||se.fecha>=c.fecha)){c.saldo=se.saldo;c.fecha=se.fecha;c.ts=Date.now()+1;saveCfg();msg+=' · saldo de '+c.nombre+': '+eur(se.saldo)}
   }
-  {const c=cfg.cuentas.find(x=>x.id===BANCO_CUENTA[imp.banco]);if(c&&imp.iban4&&!c.iban4&&!cfg.cuentas.some(x=>x.iban4===imp.iban4)){c.iban4=imp.iban4;saveCfg()}} // la próxima vez reconoce esta cuenta sola
+  {const c=cuentaImp();if(c&&imp.iban4&&!c.iban4&&!cfg.cuentas.some(x=>x.iban4===imp.iban4)){c.iban4=imp.iban4;saveCfg()}} // la próxima vez reconoce esta cuenta sola
   if(sel.length){saveMovs();programarSync();const ult=sel[sel.length-1].fecha.split('-');vm={y:+ult[0],m:+ult[1]-1};vista='movs'}else vista='resumen';
   imp={banco:imp.banco,raw:null,map:null,filas:[],nombre:'',pdfFin:null};
   render();toast(msg);
@@ -1104,8 +1191,7 @@ function vAjustes(){
   const mesOpts=sel=>'<option value="0">Cada mes</option>'+MESES.map((m,i)=>'<option value="'+(i+1)+'"'+(sel===i+1?' selected':'')+'>Solo '+m.toLowerCase()+'</option>').join('');
   return '<section class="card"><h2>¿Quién usa este móvil?</h2><div class="seg">'+cfg.personas.map(p=>'<button class="'+(yo===p?'on':'')+'" onclick="setYo(\''+esc(p)+'\')">'+esc(p)+'</button>').join('')+'</div><p class="muted small">Los apuntes se marcan con este nombre.</p><details><summary class="small">Cambiar los nombres</summary><div class="row2">'+cfg.personas.map((p,i)=>'<input value="'+esc(p)+'" aria-label="Nombre '+(i+1)+'" onchange="renombrarPersona('+i+',this.value)">').join('')+'</div></details></section>'
   +'<section class="card"><h2>💼 Nóminas</h2><p class="muted small" style="margin-top:-4px">Las nóminas que entran a partir de este día cuentan para el mes siguiente (con ellas vivís el mes que empieza). Pon 0 para desactivarlo.</p><label>A partir del día<input type="number" min="0" max="31" inputmode="numeric" value="'+(Number((cfg.nominaSig||{}).dia)||0)+'" onchange="cfg.nominaSig={dia:Math.max(0,Math.min(31,parseInt(this.value)||0))};saveCfg();render()"></label></section>'
-  +'<section class="card"><h2>💶 Saldo de las cuentas</h2><p class="muted small" style="margin-top:-4px">Escribe el saldo que ves hoy en el banco. Desde ahí la app suma los ingresos y resta los gastos. Al importar un extracto con columna de saldo se corrige solo.</p>'
-   +cfg.cuentas.map(c=>{const s=saldoCuenta(c);return '<h3>'+esc(c.nombre)+({dia:' · día a día',personal:' · personal',ahorro:' · ahorro'}[c.tipo]||'')+'</h3>'+(s!==null?'<p class="small" style="margin:0 0 6px">Ahora: <b>'+eur(s)+'</b> <span class="muted">(puesto el '+fechaCorta(c.fecha)+')</span></p>':'<p class="small muted" style="margin:0 0 6px">Sin saldo todavía.</p>')+'<div class="row2"><input id="sal_'+c.id+'" inputmode="decimal" placeholder="Saldo de hoy"><button class="btn sm" style="margin:4px 0 0" onclick="ponerSaldo(\''+c.id+'\')">Guardar saldo</button></div>'}).join('')+'</section>'
+  +seccionCuentas()
 
   +'<section class="card"><h2>☁️ Copia en la nube (Google)</h2><p class="small muted" style="margin-top:-4px">Estado: '+(sync.url?(sync.error?'<b style="color:var(--neg)">error: '+esc(sync.error)+'</b>':'conectado · última vez '+ultima):'sin conectar · los datos solo están en este móvil')+'</p>'
    +'<label>Dirección de tu hoja (URL de la aplicación web)<input value="'+esc(sync.url)+'" placeholder="https://script.google.com/macros/s/…/exec" onchange="sync.url=this.value.trim();sync.desde=0;store.set(\'cc_sync\',sync)"></label>'
@@ -1210,7 +1296,8 @@ async function sincronizar(manual){
   sincronizando=true;estadoSync();
   try{
     const enviar=movs.filter(m=>m.pend).map(m=>{const c=Object.assign({},m);delete c.pend;return c});
-    const j=await llamar({accion:'sync',desde:sync.desde||0,movs:enviar,cfg});
+    const primera=!sync.desde;
+    const j=await llamar({accion:'sync',desde:sync.desde||0,movs:enviar,cfg:primera?null:cfg});
     const enviados=new Map(enviar.map(m=>[m.id,m.modificado]));
     movs.forEach(m=>{if(m.pend&&enviados.get(m.id)===m.modificado)m.pend=false});
     (j.movs||[]).forEach(r=>{
@@ -1220,7 +1307,8 @@ async function sincronizar(manual){
       if(i<0)movs.push(Object.assign(r,{pend:false}));
       else if(!(movs[i].pend&&movs[i].modificado>r.modificado))movs[i]=Object.assign(r,{pend:false});
     });
-    if(j.cfg&&(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0)){cfg=asegurarCats(j.cfg);store.set('cc_cfg',cfg);if(!cfg.personas.includes(yo)&&!store.get('cc_yo',null))yo=cfg.personas[0]}
+    if(primera&&!j.cfg)programarSync(); // hoja nueva: en la siguiente vuelta se guarda esta configuración
+    if(j.cfg&&(primera||(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0))){cfg=asegurarCats(j.cfg);store.set('cc_cfg',cfg);if(!cfg.personas.includes(yo)&&!store.get('cc_yo',null))yo=cfg.personas[0]}
     sync.desde=j.ahora;sync.ultimaOk=Date.now();sync.error='';mercaCache={};
     store.set('cc_sync',sync);saveMovs();
     if(!syncSesion){syncSesion=true;try{generarFijos()}catch(e){}}
