@@ -193,6 +193,19 @@ function parseFecha(v){
 }
 
 /* ===================== configuración de serie (genérica; la vuestra vive en la hoja y en el móvil) ===================== */
+/* Palabras de serie que reconoce al importar (versión 2): traspasos propios, viajes, suscripciones, comidas, transporte... */
+const REGLAS_V2=[
+ ['CUENTA INTELIGENTE','traspaso'],['MODO AHORRO','inversion'],['HECTOR JAVIER MAYOL','traspaso'],['IRENE SANS','traspaso'],['MANUELA CERDAN','pension'],
+ ['VUELING','vacaciones'],['RYANAIR','vacaciones'],['EASYJET','vacaciones'],['AIR EUROPA','vacaciones'],['BOOKING','vacaciones'],['AIRBNB','vacaciones'],
+ ['NETFLIX','ocio'],['SPOTIFY','ocio'],['SCRIBD','ocio'],['DISNEY','ocio'],['HBO','ocio'],['PRIME VIDEO','ocio'],['YOUTUBE','ocio'],['CINES','ocio'],['YOOTOO','ocio'],
+ ['GLOVO','comidas'],['UBER EATS','comidas'],['JUST EAT','comidas'],['PIZZA','comidas'],['PIZZERIA','comidas'],['SUSHI','comidas'],['BURGER','comidas'],['MCDONALDS','comidas'],['KFC','comidas'],['BLOCK HOUSE','comidas'],['TABERNA','comidas'],['TAPAS','comidas'],
+ ['CAFE','desayunos'],['PANADERIA','desayunos'],['PASTELERIA','desayunos'],['HORNO','desayunos'],
+ ['PRIMAPRIX','super'],['CECOSA','super'],['ALCAMPO','super'],['MAS Y MAS','super'],
+ ['TAXI','transporte'],['TIB','transporte'],['EMT','transporte'],['RENFE','transporte'],['METRO','transporte'],
+ ['SMAP','parking'],['HERBOLARIO','suplementacion'],
+ ['SPRINGFIELD','ropa'],['BERSHKA','ropa'],['MANGO','ropa'],['STRADIVARIUS','ropa'],['MASSIMO DUTTI','ropa'],
+ ['ENERGIA XXI','luz']
+];
 function defaultCfg(){
   const C=(id,nombre,icono,grupo,extra)=>Object.assign({id,nombre,icono,grupo,presupuesto:0,oculta:false},extra||{});
   const R=(texto,cat)=>({texto,cat});
@@ -204,6 +217,7 @@ function defaultCfg(){
       C('desayunos','Desayunos','☕','variable'),
       C('gasolina','Gasolina','⛽','variable',{presupuesto:100}),
       C('parking','Parking','🅿️','variable'),
+      C('transporte','Transporte','🚌','variable'),
       C('ocio','Ocio','🎉','variable'),
       C('deporte','Deporte','🏃','variable'),
       C('casa','Cosas de casa','🏠','variable'),
@@ -212,6 +226,7 @@ function defaultCfg(){
       C('suplementacion','Suplementación','💪','variable'),
       C('medico','Médico / Nutricionista','🩺','variable'),
       C('vacaciones','Vacaciones','✈️','variable'),
+      C('sin_clasificar','Sin clasificar','❔','variable'),
       C('extras','Extras','✨','variable'),
       C('alquiler','Alquiler','🔑','fijo'),
       C('diezmo','Diezmo','⛪','fijo',{oculta:true}),
@@ -252,7 +267,8 @@ function defaultCfg(){
       R('AEAT','hacienda'),R('AGENCIA TRIBUTARIA','hacienda'),
       R('AJUNTAMENT','impuestos'),R('AYUNTAMIENTO','impuestos'),R('ATIB','impuestos'),R('ITV','itv'),
       R('TRADE REPUBLIC','traspaso'),R('TRASPASO','traspaso')
-    ],
+    ].concat(REGLAS_V2.map(([t,k])=>R(t,k))),
+    reglasV:2,
     atajos:[
       {id:uid(),nombre:'Café',importe:1.5,cat:'desayunos'},
       {id:uid(),nombre:'Súper',importe:null,cat:'super'},
@@ -283,6 +299,7 @@ function asegurarCats(c){
   if(!Array.isArray(c.cuentas))c.cuentas=[];
   if(!c.cuentas.length){c.cuentas=defaultCfg().cuentas;cambio=true} // las cuentas ya las gestiona cada uno
   if(!Array.isArray(c.reglas))c.reglas=[];
+  if((Number(c.reglasV)||0)<2){REGLAS_V2.forEach(([t,k])=>{if(!c.reglas.some(r=>norm(r.texto)===norm(t)))c.reglas.push({texto:t,cat:k})});c.reglasV=2;cambio=true}
   if(!Array.isArray(c.personas)||!c.personas.length){c.personas=defaultCfg().personas;cambio=true}
   if(cambio){c.modificado=(Number(c.modificado)||0)+1;store.set('cc_cfg',c)}
   return c;
@@ -454,7 +471,9 @@ const ICONOS={
  otros_ing:['#4F9D4A','<path d="M3 7h18v10H3ZM6 10v4M18 10v4"/><circle cx="12" cy="12" r="2.5"/>'],
  traspaso:['#6B7A86','<path d="M5 9h13l-3.5-3.5M19 15H6l3.5 3.5"/>'],
  pago_tarjeta:['#5A6AA8','<path d="M3 6h18v12H3ZM3 10h18M7 15h4"/>'],
- inversion:['#2D8C7A','<path d="M4 18 10 12l4 3 6-7M15 8h5v5"/>']
+ inversion:['#2D8C7A','<path d="M4 18 10 12l4 3 6-7M15 8h5v5"/>'],
+ transporte:['#3D7DD8','<path d="M6 17V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10M6 12h12M8 17v2M16 17v2M9 15h.01M15 15h.01"/>'],
+ sin_clasificar:['#8A8F98','<path d="M9.5 9.2a2.6 2.6 0 1 1 3.9 2.2c-.9.5-1.4 1.1-1.4 2M12 17.2v.3"/>']
 };
 const COLORES_LIBRES=['#2E9D5B','#E58A2B','#8E6BD8','#3D7DD8','#D9539A','#1FA3A3','#C99A1E','#E0533D'];
 function icoCat(c,cls){
@@ -1084,12 +1103,27 @@ const cnTip=t=>'<div class="cn-tip"><span aria-hidden="true">💡</span><span>'+
 const cnBarra=(pct,col)=>'<div class="bar"><i style="width:'+Math.max(2,Math.min(100,pct))+'%;background:'+col+'"></i></div>';
 const SVG_ALERTA='<path d="M12 4v9M12 17.5v.5M10.3 3.9 2.6 17.4a1.8 1.8 0 0 0 1.6 2.6h15.6a1.8 1.8 0 0 0 1.6-2.6L13.7 3.9a1.9 1.9 0 0 0-3.4 0Z"/>';
 const SVG_CAL='<path d="M4 9h16v10H4ZM8 5v4M16 5v4M4 13h16"/>';
+function avisoSinClas(){
+  const n=movs.filter(m=>!m.borrado&&m.categoria==='sin_clasificar').length;
+  if(!n)return '';
+  return '<section class="card" style="border-left:4px solid var(--warn)"><b>❔ '+n+' movimiento'+(n>1?'s':'')+' sin clasificar</b><p class="muted small" style="margin:4px 0 8px">Mientras no los clasifiquéis cuentan como gasto del día a día y pueden falsear el resumen y los consejos.</p><button class="btn sm" onclick="verCat(\'sin_clasificar\')">Revisarlos</button></section>';
+}
+function candidatosReglas(){
+  return movs.filter(m=>!m.borrado&&(m.categoria==='extras'||m.categoria==='sin_clasificar')&&m.nota).map(m=>({m,k:sugerir(m.nota)})).filter(x=>x.k&&x.k!==x.m.categoria&&cfg.cats.some(c=>c.id===x.k)&&(x.m.tipo!=='gasto'||catById(x.k).grupo!=='ingreso'));
+}
+function previaReglas(){
+  const c=candidatosReglas();
+  if(!c.length){toast('No hay nada que recolocar con las reglas actuales');return}
+  $('#sheet').innerHTML='<h2>Recolocar movimientos</h2><p class="muted small" style="margin-top:-4px">Estos '+c.length+' movimientos están en Extras o Sin clasificar y las reglas saben dónde van. Revísalos antes de aplicar.</p><div style="max-height:50vh;overflow:auto">'+c.slice(0,200).map(x=>'<div class="flex" style="justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span class="small"><b>'+esc(x.m.nota)+'</b><br>'+fechaCorta(x.m.fecha)+' · '+eur(x.m.importe)+'</span><span class="small" style="text-align:right">→ '+catById(x.k).icono+' '+esc(catById(x.k).nombre)+'</span></div>').join('')+'</div><button class="btn" style="margin-top:12px" onclick="aplicarReglas()">Recolocar los '+c.length+'</button><button class="btn ghost" onclick="cerrar()">Cancelar</button>';
+  abrir();
+}
+function aplicarReglas(){const c=candidatosReglas();c.forEach(x=>updMov(x.m.id,{categoria:x.k}));cerrar();render();toast(c.length+' movimientos recolocados')}
 function vConsejos(){
   const a=analisisConsejos(vm.y,vm.m);
   const nav=monthNav();
   const mes=MESES[vm.m].toLowerCase();
   if(a.sinDatos)return nav+'<section class="card"><h2>💡 Consejos</h2><p class="muted">Todavía no hay datos suficientes. Apuntad vuestros gastos unos días y aquí aparecerán consejos sobre dónde se va el dinero, cuánto ahorráis y qué podéis recortar.</p></section>';
-  let h=nav;
+  let h=nav+avisoSinClas();
   // Resumen del mes
   const t=a.t;
   if(a.pocoMes){
@@ -1165,7 +1199,7 @@ function vConsejos(){
 }
 function vResumen(){
   const seg='<div class="seg" style="margin-bottom:12px"><button class="'+(modoRes==='mes'?'on':'')+'" onclick="modoRes=\'mes\';render()">Mes</button><button class="'+(modoRes==='ano'?'on':'')+'" onclick="modoRes=\'ano\';render()">Año</button></div>';
-  return seg+monthNav()+(modoRes==='mes'?resumenMes():resumenAno());
+  return seg+monthNav()+avisoSinClas()+(modoRes==='mes'?resumenMes():resumenAno());
 }
 function resumenMes(){
   const t=calc(deMes(vm.y,vm.m));
@@ -1552,7 +1586,7 @@ function vImportar(){
   const sinCat=imp.filas.filter(f=>f.ok&&!f.cat).length;
   h+='<section class="card"><h2>'+imp.filas.length+' movimientos</h2><p class="small" style="margin-top:-4px">✅ '+n.nuevo+' nuevos · <span class="badge w">'+n.dup+' posibles repetidos</span> · '+n.ya+' ya importados</p>'
    +(saldoDelExtracto()?'<p class="small">💶 Saldo según el extracto: <b>'+eur(saldoDelExtracto().saldo)+'</b> ('+fechaCorta(saldoDelExtracto().fecha)+'). Se guardará al importar.</p>':'')
-   +(sinCat?'<p class="small" style="color:var(--warn)">⚠️ '+sinCat+' sin categoría. Elige una: la app lo recordará para la próxima vez.</p>':'')
+   +(sinCat?'<p class="small" style="color:var(--warn)">⚠️ '+sinCat+' sin categoría. Elige una y la app lo recordará para la próxima vez; si no, quedarán en «Sin clasificar» para revisarlos después.</p>':'')
    +'<div id="ifilas">'+filasHTML()+'</div>'
    +'<button class="btn" onclick="importarSeleccion()">Importar seleccionados</button></section>';
   return h;
@@ -1604,7 +1638,7 @@ function importarSeleccion(){
   if(corr.length&&!sel.length){saveMovs();programarSync()}
   sel.forEach(f=>{if(f.reemplaza){const e=movs.find(x=>x.id===f.reemplaza);if(e)Object.assign(e,{borrado:true,modificado:Date.now(),pend:true})}});
   const ci=cuentaImp(),antigua=ci&&CLAVE_ANTIGUA[ci.id];
-  sel.forEach(f=>{const m=nuevoMov({fecha:f.fecha,tipo:f.tipo,importe:f.importe,categoria:f.cat||(f.tipo==='gasto'?'extras':'otros_ing'),nota:f.concepto,quien:yo,origen:ci&&!antigua?ci.nombre:imp.banco,importKey:f.key});if(ci&&!antigua)m.cuenta=ci.id;movs.push(m)});
+  sel.forEach(f=>{const m=nuevoMov({fecha:f.fecha,tipo:f.tipo,importe:f.importe,categoria:f.cat||(f.tipo==='gasto'?'sin_clasificar':'otros_ing'),nota:f.concepto,quien:yo,origen:ci&&!antigua?ci.nombre:imp.banco,importKey:f.key});if(ci&&!antigua)m.cuenta=ci.id;movs.push(m)});
   guardarMapa();
   let msg=sel.length+' movimientos importados'+(corr.length?' · '+corr.length+' corregidos':'')+(ligados?' · '+ligados+' ya apuntados enlazados':'');
   if(se){
@@ -1646,7 +1680,7 @@ function vAjustes(){
 
   +'<section class="card"><details><summary><b>Palabras que reconoce al importar ('+cfg.reglas.length+')</b></summary>'
    +cfg.reglas.map((r,i)=>'<div class="frow"><span>'+esc(r.texto)+'</span><span class="small">→</span><span class="small">'+catById(r.cat).icono+' '+esc(catById(r.cat).nombre)+'</span><button class="x" onclick="cfg.reglas.splice('+i+',1);saveCfg();render()">✕</button></div>').join('')
-   +'<h3>Añadir palabra</h3><div class="row2"><input id="rTxt" placeholder="Ej: EROSKI"><select id="rCat">'+catOptions('super')+'</select></div><button class="btn ghost" onclick="nuevaRegla()">Añadir</button></details></section>'
+   +'<h3>Añadir palabra</h3><div class="row2"><input id="rTxt" placeholder="Ej: EROSKI"><select id="rCat">'+catOptions('super')+'</select></div><button class="btn ghost" onclick="nuevaRegla()">Añadir</button><h3>Ordenar lo ya apuntado</h3><p class="muted small">Mueve a su categoría los movimientos que están en Extras o Sin clasificar y que las reglas reconocen. Antes te enseña la lista.</p><button class="btn ghost" onclick="previaReglas()">🔁 Reaplicar reglas</button></details></section>'
 
   +'<section class="card"><h2>Copias y Excel</h2><button class="btn ghost" onclick="exportarExcel('+vm.y+')">📊 Descargar Excel de '+vm.y+'</button><button class="btn ghost" onclick="descargarCopia()">💾 Descargar copia completa</button><label class="file" style="padding:14px">♻️ Restaurar una copia<input type="file" accept=".json" onchange="restaurarCopia(this.files[0]);this.value=\'\'"></label></section>'
 
