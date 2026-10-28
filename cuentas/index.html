@@ -1594,6 +1594,17 @@ setInterval(()=>sincronizar(false),5*60*1000);
 
 render();
 sincronizar(false);
+/* Archivo compartido desde otra app (Android → Compartir → Cuentas): lo lee como si lo hubieras subido desde el botón 📷 */
+async function recogerCompartido(){
+  if(!/[?&]compartido=1/.test(location.search))return;
+  try{history.replaceState(null,'',location.pathname)}catch(e){}
+  try{
+    const c=await caches.open('cc-compartido'),r=await c.match('archivo');if(!r)return;await c.delete('archivo');
+    const b=await r.blob(),f=new File([b],decodeURIComponent(r.headers.get('X-Nombre')||'')||'compartido',{type:b.type});
+    if(!bienv)setTimeout(()=>leerImagen(f),600);
+  }catch(e){}
+}
+recogerCompartido();
 /* App instalable: registra el trabajador que permite instalarla y abrirla sin conexión */
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
