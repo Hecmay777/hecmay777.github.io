@@ -465,6 +465,183 @@ function catOptions(sel,conVacio){
 }
 const personasOpts=sel=>(sel!==undefined&&!cfg.personas.includes(sel)?'<option value="'+esc(sel||'')+'" selected>'+(sel?esc(sel):'—')+'</option>':'')+cfg.personas.map(p=>'<option'+(p===sel?' selected':'')+'>'+esc(p)+'</option>').join('');
 
+/* ===================== LEER TICKETS Y CAPTURAS (foto → apuntes) ===================== */
+let tk=null;
+const botonTicket=()=>'<button class="btn ghost" style="margin:10px 0 0" onclick="abrirLector()">📷 Ticket o captura del banco</button>';
+function abrirLector(){
+  if(!sync.url||!sync.clave){toast('Para leer fotos hay que tener conectada la hoja de Google (Ajustes)');return}
+  $('#sheet').innerHTML='<h2>Leer una imagen</h2><p class="muted small" style="margin-top:-4px">Haz una foto o elige una imagen de la galería.</p>'
+   +'<label class="file" style="margin-top:8px">🧾 Ticket de compra<small class="muted" style="display:block;font-weight:500">un apunte por artículo</small><input type="file" accept="image/*" onchange="leerImagen(this.files[0],\'ticket\');this.value=\'\'"></label>'
+   +'<label class="file" style="margin-top:10px">🏦 Captura de movimientos del banco<small class="muted" style="display:block;font-weight:500">una línea = un apunte</small><input type="file" accept="image/*" onchange="leerImagen(this.files[0],\'banco\');this.value=\'\'"></label>'
+   +'<button class="btn ghost" onclick="cerrar()">Cancelar</button>';
+  abrir();
+}
+/* Reduce la foto (1800 px, JPEG) para que suba rápido y el lector de Google la entienda bien */
+async function reducirImagen(f){
+  const bm=await createImageBitmap(f,{imageOrientation:'from-image'});
+  const k=Math.min(1,1800/Math.max(bm.width,bm.height)),c=document.createElement('canvas');
+  c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);
+  const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(bm,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',0.85).split(',')[1];
+}
+async function leerImagen(f,modo){
+  if(!f)return;
+  $('#sheet').innerHTML='<h2>Leyendo la imagen…</h2><p class="muted">Suele tardar unos segundos.</p>';abrir();
+  let j;
+  try{j=await llamar({accion:'ocr',imagen:await reducirImagen(f),mime:'image/jpeg'})}
+  catch(e){cerrar();toast('No he podido leer la imagen: '+(e.message||e));return}
+  if(typeof j.texto!=='string'){cerrar();toast('Falta actualizar el script de Google para leer imágenes');return}
+  if(modo==='banco'){cerrar();bancoDeTexto(j.texto);return}
+  tk=ticketDeTexto(j.texto,j.ticket);
+  if(!tk.items.length){cerrar();toast('No encuentro artículos. Prueba con una foto más recta y con buena luz.');return}
+  pintarTicket();
+}
+/* ---- ticket de compra ---- */
+function numFechaOcr(y,m,d){
+  y=+y;if(y<100)y+=2000;m=+m;d=+d;if(m<1||m>12||d<1||d>31)return null;
+  const f=y+'-'+pad(m)+'-'+pad(d);return f<'2020-01-01'||f>ymd(new Date(Date.now()+864e5))?null:f;
+}
+function fechaDeTicket(t){const m=String(t).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}|\d{2})(?!\d)/);return m?numFechaOcr(m[3],m[2],m[1]):null}
+function comercioDeTicket(t){
+  if(/MERCADONA/i.test(t))return 'Mercadona';
+  const l=String(t).split(/\r?\n/).map(x=>x.trim()).find(x=>(x.match(/[A-Za-zÁÉÍÓÚÑáéíóúñ]/g)||[]).length>=3&&!/^\d/.test(x)&&!/TICKET|FACTURA|NIF|CIF/i.test(x));
+  return l?l.replace(/\s+/g,' ').slice(0,28).toLowerCase().replace(/(^|\s)\S/g,s=>s.toUpperCase()):'';
+}
+/* Ticket de un comercio cualquiera. El lector de Google a veces separa descripción e importe en líneas distintas: se admiten las dos formas */
+function parseGenerico(texto){
+  const SKIP=/TOTAL|SUBTOTAL|IVA\b|I\.V\.A|BASE|CUOTA|ENTREGADO|CAMBIO|EFECTIVO|TARJETA|VISA|MASTERCARD|A PAGAR|FACTURA|TICKET|NIF|CIF|TEL[EÉ]F|FECHA|HORA|CAJA|OPERADOR|GRACIAS|PUNTOS|DESCUENTO|AHORRO|^DESCRIPCI|^P\. ?UNIT|^IMPORTE|^CANT|^PRECIO|\bOP:/i;
+  const L=String(texto).split(/\r?\n/).map(l=>l.replace(/\u00a0/g,' ').trim()).filter(Boolean);
+  const P='-?\\d{1,4}[.,]\\d{2}(?!\\d)',letras=/[A-Za-zÁÉÍÓÚÑáéíóúñ]{2}/;
+  const soloPrecios=new RegExp('^(?:'+P+'\\s*(?:€\\/?\\s*kg|kg|€|EUR|[A-Z])?\\s*){1,3}$','i');
+  const finPrecios=new RegExp('^(.*?'+'[A-Za-zÁÉÍÓÚÑáéíóúñ]'+'.*?)\\s+((?:'+P+'\\s*(?:€\\/?\\s*kg|kg|€|EUR)?\\s*){1,3})\\s*[A-Z]?$','i');
+  const ultimo=t=>{const m=t.match(new RegExp(P,'g'));return m?parseNum(m[m.length-1]):0};
+  const items=[];let total=null,pend='',espT=false;
+  const add=(d,imp)=>{
+    const q=d.match(/^(\d{1,2})\s*[xX]?\s+(.+)$/),desc=(q?q[2]:d).replace(/\s+/g,' ').trim();
+    if(imp>0&&desc.length>=2&&letras.test(desc))items.push({producto:desc,cant:q?+q[1]:1,importe:r2(imp),grupo:''});
+  };
+  L.forEach(l=>{
+    if(/^(TOTAL|A PAGAR|IMPORTE TOTAL)/i.test(l)){const v=ultimo(l);if(v)total=v;else espT=true;pend='';return}
+    if(espT&&soloPrecios.test(l)){total=ultimo(l);espT=false;return}
+    espT=false;
+    if(SKIP.test(l)){pend='';return}
+    if(soloPrecios.test(l)){if(pend)add(pend,ultimo(l));pend='';return}
+    const m=l.match(finPrecios);
+    if(m){add(m[1],ultimo(m[2]));pend='';return}
+    pend=letras.test(l)?l:'';
+  });
+  return {items,total,ok:false};
+}
+const GRUPO_CAT={'Limpieza y hogar':'casa','Higiene':'farmacia','Suplementos':'suplementacion'};
+function catDeArticulo(d,grupo){
+  const ok=id=>cfg.cats.some(c=>c.id===id&&!c.oculta)?id:'';
+  const g=GRUPO_CAT[grupo];if(g&&ok(g))return g;
+  const s=sugerir(d);if(s&&catById(s).grupo==='variable')return s;
+  if(!grupo){
+    const n=' '+norm(d)+' ';
+    if(/ (DETERG|LEJIA|FREGONA|BAYETA|ESTROPAJO|SUAVIZ|LAVAVAJ|FRIEGA|BOLSA|PILA |AMBIENTADOR)/.test(n)&&ok('casa'))return 'casa';
+    if(/ (CHAMPU|GEL |DENTIF|DESODOR|CEPILLO|COMPRESA|TAMPON|CREMA|JABON)/.test(n)&&ok('farmacia'))return 'farmacia';
+  }
+  return ok('super')||ok('extras')||cfg.cats.find(c=>c.grupo==='variable'&&!c.oculta).id;
+}
+function ticketDeTexto(texto,srv){
+  const g=srv&&srv.items&&srv.items.length?srv:parseGenerico(texto);
+  const items=g.items.map(i=>({desc:i.producto,importe:r2(i.importe),cat:catDeArticulo(i.producto,i.grupo),on:true}));
+  const suma=r2(items.reduce((a,i)=>a+i.importe,0));
+  const t={fecha:fechaDeTicket(texto)||hoy(),comercio:comercioDeTicket(texto),items,total:g.total!=null?r2(g.total):suma,modo:'items',cuenta:(cuentaDia()||{}).id,igual:false};
+  return t;
+}
+const tkSuma=()=>r2(tk.items.filter(i=>i.on).reduce((a,i)=>a+(Number(i.importe)||0),0));
+function tkDuplicado(){
+  const s=tkSuma(),t=new Date(tk.fecha).getTime();
+  const por=movs.find(m=>!m.borrado&&m.tipo==='gasto'&&(Math.abs(m.importe-s)<0.01||Math.abs(m.importe-tk.total)<0.01)&&Math.abs(new Date(m.fecha).getTime()-t)<=2*864e5);
+  if(por)return catById(por.categoria).nombre+' '+eur(por.importe)+' ('+fechaCorta(por.fecha)+')';
+  const ya=movs.find(m=>!m.borrado&&String(m.importKey).startsWith('tk|'+tk.fecha+'|'+s.toFixed(2)));
+  return ya?'este mismo ticket, ya guardado':'';
+}
+function pintarTicket(){
+  const dup=tkDuplicado(),s=tkSuma(),n=tk.items.filter(i=>i.on).length;
+  const filas=tk.items.map((i,k)=>'<div class="irow'+(i.on?'':' off')+'"><input type="checkbox"'+(i.on?' checked':'')+' onchange="tk.items['+k+'].on=this.checked;pintarTicket()"><div class="imain">'
+    +'<div class="row2" style="grid-template-columns:1fr 92px;margin:0"><input value="'+esc(i.desc)+'" aria-label="Artículo" onchange="tk.items['+k+'].desc=this.value"><input value="'+String(i.importe).replace('.',',')+'" inputmode="decimal" aria-label="Importe" style="text-align:right" onchange="tk.items['+k+'].importe=r2(parseNum(this.value));pintarTicket()"></div>'
+    +'<select onchange="tk.items['+k+'].cat=this.value">'+catOptions(i.cat)+'</select></div></div>').join('');
+  $('#sheet').innerHTML='<h2>Ticket'+(tk.comercio?' de '+esc(tk.comercio):'')+'</h2>'
+   +'<div class="row2"><label>Fecha<input type="date" value="'+esc(tk.fecha)+'" onchange="tk.fecha=this.value"></label><label>Comercio<input value="'+esc(tk.comercio)+'" onchange="tk.comercio=this.value"></label></div>'
+   +'<div id="tkfilas">'+filas+'</div>'
+   +'<p class="small" style="margin:10px 0 4px">Artículos marcados: <b>'+eur(s)+'</b> · Ticket: <b>'+eur(tk.total)+'</b></p>'
+   +(Math.abs(s-tk.total)<0.015?'<p class="small" style="color:var(--pos);margin:0 0 8px">✓ Los artículos suman el total del ticket</p>':'<p class="small" style="color:var(--warn);margin:0 0 8px">⚠️ No suman lo mismo: revisa los importes (puede haberse leído mal alguno o faltar un artículo).</p>')
+   +(dup?'<p class="small" style="color:var(--warn);margin:0 0 6px">⚠️ Ya tienes: '+esc(dup)+'. Si ya está apuntado, no lo guardes otra vez.</p><label style="display:flex;gap:8px;align-items:center;margin:0 0 8px"><input type="checkbox" style="width:auto"'+(tk.igual?' checked':'')+' onchange="tk.igual=this.checked"> Guardarlo igualmente</label>':'')
+   +'<div class="seg" style="margin-top:8px"><button class="'+(tk.modo==='items'?'on':'')+'" onclick="tk.modo=\'items\';pintarTicket()">Uno por artículo</button><button class="'+(tk.modo==='cat'?'on':'')+'" onclick="tk.modo=\'cat\';pintarTicket()">Agrupado por categoría</button></div>'
+   +(cuentasVis().length>1?'<label>Pagado desde<select onchange="tk.cuenta=this.value">'+cuentasVis().map(c=>'<option value="'+esc(c.id)+'"'+(tk.cuenta===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>').join('')+'</select></label>':'')
+   +'<button class="btn" onclick="guardarTicket()">'+(tk.modo==='cat'?'Guardar por categorías':'Guardar '+n+' apuntes')+'</button><button class="btn ghost" onclick="cerrar()">Cancelar</button>';
+  abrir();
+}
+function guardarTicket(){
+  const on=tk.items.filter(i=>i.on&&i.importe>0);
+  if(!on.length){toast('No hay artículos marcados');return}
+  if(tkDuplicado()&&!tk.igual){toast('Parece que ya está apuntado. Marca «Guardarlo igualmente» si es otro.');return}
+  const s=tkSuma(),key='tk|'+tk.fecha+'|'+s.toFixed(2),pre=tk.comercio?tk.comercio+' · ':'';
+  let filas;
+  if(tk.modo==='cat'){const g={};on.forEach(i=>g[i.cat]=r2((g[i.cat]||0)+i.importe));filas=Object.entries(g).map(([c,v])=>({cat:c,importe:v,nota:pre+catById(c).nombre}))}
+  else filas=on.map(i=>({cat:i.cat,importe:i.importe,nota:pre+i.desc}));
+  filas.forEach((f,k)=>{const m=nuevoMov({fecha:tk.fecha,tipo:'gasto',importe:f.importe,categoria:f.cat,nota:f.nota,quien:yo,origen:'ticket',importKey:key+'#'+(k+1)});if(tk.cuenta)m.cuenta=tk.cuenta;movs.push(m)});
+  saveMovs();programarSync();cerrar();
+  const u=tk.fecha.split('-');vm={y:+u[0],m:+u[1]-1};vista='movs';render();
+  toast(filas.length+' apuntes guardados ('+eur(s)+')');
+}
+/* Más tarde, al importar el extracto del banco, el cargo único del ticket se reconoce como ya apuntado */
+function dupTicket(fecha,importe,tipo,usados){
+  if(tipo!=='gasto')return null;
+  const t=new Date(fecha).getTime(),vistos=new Set();
+  for(const m of movs){
+    if(m.borrado||!String(m.importKey).startsWith('tk|'))continue;
+    const k=String(m.importKey).split('#')[0];if(vistos.has(k))continue;vistos.add(k);
+    const [,f,tot]=k.split('|');
+    if(!usados.has(k)&&Math.abs(+tot-importe)<0.01&&Math.abs(new Date(f).getTime()-t)<=3*864e5){usados.add(k);return {id:k,categoria:m.categoria,importe:+tot,fecha:f}}
+  }
+  return null;
+}
+/* ---- captura de movimientos del banco ---- */
+const MES_ES={ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,SET:9,OCT:10,NOV:11,DIC:12};
+function fechaLibre(s,y0){
+  s=norm(s).trim();
+  if(s==='HOY')return hoy();if(s==='AYER')return ymd(new Date(Date.now()-864e5));
+  let m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?$/),d,mo,y;
+  if(m){d=+m[1];mo=+m[2];y=m[3]?+m[3]:null}
+  else{m=s.match(/^(?:[A-Z]{3,9}\.?,?\s+)?(\d{1,2})\s+(?:DE\s+)?([A-Z]{3,10})\.?(?:\s+(?:DE\s+)?(\d{4}))?$/);if(!m||!MES_ES[m[2].slice(0,3)])return null;d=+m[1];mo=MES_ES[m[2].slice(0,3)];y=m[3]?+m[3]:null}
+  if(y&&y<100)y+=2000;
+  const ahora=new Date();if(!y){y=ahora.getFullYear();if(new Date(y,mo-1,d)>new Date(Date.now()+864e5))y--}
+  return numFechaOcr(y,mo,d);
+}
+function parseBancoTexto(texto){
+  const L=String(texto).split(/\r?\n/).map(l=>l.replace(/ /g,' ').trim()).filter(Boolean);
+  const AMT=/([+\-−–]?)\s?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s*(?:€|EUR)?\s*$/;
+  const out=[];let fecha=null,buf=[];
+  L.forEach(l0=>{
+    let l=l0;
+    if(/SALDO|DISPONIBLE|BALANCE/i.test(l)){buf=[];return}
+    const d0=fechaLibre(l);if(d0){fecha=d0;buf=[];return}
+    const ini=l.match(/^(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?)\s+(.*)$/);
+    if(ini&&fechaLibre(ini[1])){fecha=fechaLibre(ini[1]);l=ini[2]}
+    const m=l.match(AMT);
+    if(m){
+      let con=l.slice(0,m.index).replace(/[\s|·•>-]+$/,'').trim();
+      if(!con)con=buf.join(' ').trim();
+      if(!con){buf=[];return}
+      const abs=parseNum(m[2]);
+      const ingreso=m[1]==='+'||(!m[1]&&/N[OÓ]MINA|TRANSFERENCIA RECIBIDA|INGRESO|ABONO|DEVOLUCI[OÓ]N|BIZUM RECIBIDO/i.test(con));
+      out.push([fecha||hoy(),con,ingreso?abs:-abs]);buf=[];
+    }else{if(/[A-Za-zÁÉÍÓÚÑáéíóúñ]{3}/.test(l)){buf.push(l);if(buf.length>2)buf.shift()}}
+  });
+  return out;
+}
+function bancoDeTexto(texto){
+  const filas=parseBancoTexto(texto);
+  if(!filas.length){toast('No encuentro movimientos en la captura. Prueba con una más nítida.');return}
+  imp.banco=claveImp(cuentaDia());imp.raw=[['Fecha','Concepto','Importe']].concat(filas);imp.nombre='captura';imp.pdfFin=null;imp.iban4='';
+  imp.map=detectar(imp.raw);construirFilas();ir('importar');
+  toast(filas.length+' movimientos leídos de la captura: revísalos y elige la cuenta');
+}
+
 /* ===================== APUNTAR ===================== */
 function leerForm(){form.imp=$('#fImp').value;form.nota=$('#fNota').value;form.fecha=$('#fFecha').value;form.quien=$('#fQuien').value}
 function vApuntar(){
@@ -479,7 +656,7 @@ function vApuntar(){
   const ultimos=movs.filter(m=>!m.borrado).sort((a,b)=>b.creado-a.creado).slice(0,6);
   return tarjetaSaldo(true)+'<section class="card"><div class="seg"><button class="'+(form.tipo==='gasto'?'on':'')+'" onclick="setTipo(\'gasto\')">➖ Gasto</button><button class="'+(form.tipo==='ingreso'?'on':'')+'" onclick="setTipo(\'ingreso\')">➕ Ingreso</button></div>'
    +'<div class="amount"><input id="fImp" inputmode="decimal" placeholder="0,00" autocomplete="off" value="'+esc(form.imp)+'" onkeydown="if(event.key===\'Enter\')guardar()"><span>€</span></div>'
-   +atajos+cats+subs
+   +atajos+botonTicket()+cats+subs
    +'<div class="row2"><label>Fecha<input type="date" id="fFecha" value="'+esc(form.fecha||hoy())+'"></label><label>Quién<select id="fQuien">'+personasOpts(form.quien||yo)+'</select></label></div>'
    +'<label>Nota (opcional)<input id="fNota" placeholder="Ej: Mercadona, regalo cumple…" value="'+esc(form.nota)+'"></label>'
    +'<button class="btn" onclick="guardar()">Guardar</button></section>'
@@ -1090,11 +1267,11 @@ function construirFilas(){
     const base=imp.banco+'|'+f+'|'+norm(con)+'|'+r2(v);
     veces[base]=(veces[base]||0)+1;
     const esPend=colP>=0&&String(r[colP]??'').trim()!=='';
-    const key=(esPend?'pend|':'')+base+'#'+veces[base];
+    const key=(esPend||imp.nombre==='captura'?'pend|':'')+base+'#'+veces[base];
     const viejo=colA>=0?movs.find(m=>!m.borrado&&m.importKey===String(r[colA]??'')):null;
     const ya=movs.some(m=>!m.borrado&&m.importKey===key)||!!viejo;
     const corrige=viejo&&viejo.importKey!==key?{id:viejo.id,importe:Math.abs(r2(v)),tipo:v<0?'gasto':'ingreso',key,nota:con}:null;
-    const dup=ya?null:buscarDup(f,Math.abs(r2(v)),tipo,usados);
+    const dup=ya?null:(buscarDup(f,Math.abs(r2(v)),tipo,usados)||dupTicket(f,Math.abs(r2(v)),tipo,usados));
     if(dup)usados.add(dup.id);
     const catS=sugerir(con);
     const est=(!ya&&!dup&&catS)?movs.find(x=>!x.borrado&&x.origen==='fijo'&&String(x.nota).endsWith(AUTO)&&x.tipo===tipo&&x.categoria===catS&&!usados.has(x.id)&&Math.abs(new Date(x.fecha)-new Date(f))<=21*864e5):null;
