@@ -1049,18 +1049,23 @@ function analisisConsejos(y,m,ahora){
   const dia=actual?d.getDate():dias;
   const list=deMes(y,m),t=calc(list);
   const prev=mesesAntes(y,m,6);
-  const a={y,m,actual,dia,dias,t,list,prev,hayHist:prev.length>=2,pocoMes:actual&&dia<7};
+  // Un mes cuenta para las medias solo si está completo: gastos apuntados en 10 días o más y repartidos por el mes (no el de cuando empezasteis a usar la app)
+  const completo=p=>{const dd=new Set(),sg=new Set();p.list.forEach(x=>{if(x.tipo!=='gasto')return;const g=catById(x.categoria).grupo;if(g==='neutro'||g==='ingreso')return;const n=+String(x.fecha).slice(8,10);dd.add(n);sg.add(Math.min(3,Math.floor((n-1)/7)))});return dd.size>=10&&sg.size>=3};
+  const prevC=prev.filter(completo);
+  const a={y,m,actual,dia,dias,t,list,prev,prevC,hayHist:prevC.length>=2,pocoMes:actual&&dia<7};
   const ritmo=actual&&dia<dias?dias/Math.max(dia,1):1;
   a.sinDatos=!list.length&&!prev.length;
   // Media mensual por categoría en los meses anteriores
   const med={};
-  cfg.cats.forEach(c=>{if(c.grupo==='variable'||c.grupo==='fijo')med[c.id]=mediaDe(prev.map(p=>p.t.cat[c.id]||0))});
+  cfg.cats.forEach(c=>{if(c.grupo==='variable'||c.grupo==='fijo')med[c.id]=mediaDe(prevC.map(p=>p.t.cat[c.id]||0))});
   a.med=med;
   // Previsión de gasto y de ahorro del mes
   const pend=actual?pendientesFijos(y,m,t).reduce((s,f)=>s+(Number(f.sugerido)||0),0):0;
   a.proy=actual?r2(t.fijo+pend+t.variable*ritmo):r2(t.gastos);
-  const ingPrev=mediaDe(prev.slice(0,3).filter(p=>p.t.ingreso>0).map(p=>p.t.ingreso));
+  const ingPrev=mediaDe(prevC.slice(0,3).filter(p=>p.t.ingreso>0).map(p=>p.t.ingreso));
   a.ingEsp=actual?(t.ingreso>0||ingPrev>0?Math.max(t.ingreso,ingPrev):null):(t.ingreso>0?t.ingreso:null);
+  // Sin ningún mes completo con ingresos y con muy poco ingresado, no se puede decir cuánto sobra: mejor no dar una cifra que asuste sin motivo
+  if(actual&&!ingPrev&&a.ingEsp!==null&&a.ingEsp<0.5*a.proy)a.ingEsp=null;
   a.margen=a.ingEsp!==null?r2(a.ingEsp-a.proy):null;
   a.tasa=a.ingEsp>0&&a.margen!==null?a.margen/a.ingEsp:null;
   // Dónde se va más dinero, frente a la media (en lo variable, el mes en curso se proyecta al mes completo)
@@ -1084,16 +1089,23 @@ function analisisConsejos(y,m,ahora){
   });
   a.raros=raros.sort((p,q)=>q.k-p.k).slice(0,2);
   // Gastos fijos de cada mes
-  const base=prev.slice(0,3);
+  const base=prevC.slice(0,3);
   a.fijosCat=cfg.cats.filter(c=>c.grupo==='fijo').map(c=>({c,v:base.length?mediaDe(base.map(p=>p.t.cat[c.id]||0)):Math.max(0,t.cat[c.id]||0)})).filter(x=>x.v>=1).sort((x,y)=>y.v-x.v);
   a.fijosMes=r2(a.fijosCat.reduce((s,x)=>s+x.v,0));
   // Ahorro de los meses cerrados
-  const pc=prev.filter(p=>p.t.ingreso>0);
+  const pc=prevC.filter(p=>p.t.ingreso>0);
   a.ahorro=pc.length?{n:pc.length,pct:mediaDe(pc.map(p=>p.t.ahorro/p.t.ingreso))*100,eur:mediaDe(pc.map(p=>p.t.ahorro)),ing:mediaDe(pc.map(p=>p.t.ingreso)),vari:mediaDe(pc.map(p=>p.t.variable))}:null;
-  // Colchón: lo que hay en todas las cuentas frente al gasto medio mensual
-  const saldos=cuentasVis().map(saldoCuenta).filter(s=>s!==null);
-  const gm=prev.length?mediaDe(prev.map(p=>p.t.gastos)):a.proy;
-  a.colchon=saldos.length&&gm>0?{saldo:r2(saldos.reduce((s,x)=>s+x,0)),gm:r2(gm),meses:saldos.reduce((s,x)=>s+x,0)/gm}:null;
+  // Colchón: lo que hay en las cuentas de ahorro (si no hay ninguna marcada como ahorro, en todas) frente al gasto mensual
+  const conSaldo=cuentasVis().filter(c=>saldoCuenta(c)!==null);
+  const dAhorro=conSaldo.filter(c=>c.tipo==='ahorro');
+  const cuCol=dAhorro.length?dAhorro:conSaldo;
+  const sCol=cuCol.reduce((s,c)=>s+saldoCuenta(c),0);
+  // Gasto mensual de referencia: media de meses completos (si hay al menos 2); si no, la previsión de este mes; y nunca menos que los recibos fijos
+  let gm=null,fuente='';
+  if(prevC.length>=2){gm=mediaDe(prevC.map(p=>p.t.gastos));fuente='meses'}
+  else if(!a.pocoMes&&a.proy>0){gm=a.proy;fuente='mes'}
+  if(a.fijosMes>0&&(gm===null||a.fijosMes>gm)){gm=a.fijosMes;fuente='fijos'}
+  a.colchon=cuCol.length?{saldo:r2(sCol),soloAhorro:dAhorro.length>0,gm:gm>0?r2(gm):null,fuente,meses:gm>0?sCol/gm:null}:null;
   return a;
 }
 const cnTag=(k,t)=>'<span class="cn-tag '+k+'">'+t+'</span>';
@@ -1142,7 +1154,7 @@ function vConsejos(){
   if(a.top.length){
     const fila=x=>'<div class="cn-row"><span class="cn-n">'+esc(x.c.nombre)+'</span><b>'+eur0(x.v)+'</b>'+(x.pct!==null?'<span class="cn-chip '+(x.pct>=10?'up':x.pct<=-10?'down':'')+'">'+(x.pct>0?'+':x.pct<0?'−':'')+Math.abs(x.pct)+' %</span>':'')+'</div>';
     let cu=a.top.map(fila).join('');
-    cu+='<p class="small muted" style="margin:8px 0 0">'+(a.hayHist?'El porcentaje compara con vuestra media mensual de los últimos '+a.prev.length+' meses'+(a.actual?' (lo variable, calculado para el mes completo)':'')+'.':'Cuando haya un par de meses más de datos, os diré cómo se compara con lo habitual.')+'</p>';
+    cu+='<p class="small muted" style="margin:8px 0 0">'+(a.hayHist?'El porcentaje compara con vuestra media mensual de los últimos '+a.prevC.length+' meses'+(a.actual?' (lo variable, calculado para el mes completo)':'')+'.':'Cuando haya un par de meses más de datos, os diré cómo se compara con lo habitual.')+'</p>';
     if(a.sube){const ahorro=Math.round(a.sube.cv-a.sube.md);cu+=cnTip('<b>'+esc(a.sube.c.nombre)+'</b> es lo que más ha subido sobre vuestra media. Si volvierais a ella, ahorraríais unos <b>'+eur0(ahorro)+'</b> este mes.')}
     h+=cnCard('#2E9D5B',ICONOS.super[1],'Dónde se va más dinero',cnTag('info',a.actual?'Este mes':'Ese mes'),cu);
   }
@@ -1179,20 +1191,27 @@ function vConsejos(){
   if(a.ahorro){
     const p=Math.round(a.ahorro.pct),k=p>=20?['ok','Muy bien']:p>=10?['info','Bien']:p>=0?['warn','Mejorable']:['bad','Atención'];
     const corte=a.ahorro.vari*0.1,nuevo=a.ahorro.eur+corte,np=a.ahorro.ing>0?Math.round(nuevo/a.ahorro.ing*100):null;
-    let cu='<p>'+(p<0?'De media, en los últimos '+a.ahorro.n+' meses habéis gastado más de lo que ingresabais, unos <b>'+eur0(-a.ahorro.eur)+'</b> al mes.':'De media ahorráis un <b>'+p+' %</b> de lo que ingresáis, unos <b>'+eur0(a.ahorro.eur)+'</b> al mes.')+'</p>'+cnBarra(Math.max(0,p)/20*100,'var(--'+(p>=10?'pos':p>=0?'warn':'neg')+')')+'<div class="cn-scale"><span>0 %</span><span>Meta habitual: 20 %</span></div>';
+    let cu='<p>'+(p<0?'De media, en '+(a.ahorro.n>1?'los últimos '+a.ahorro.n+' meses completos':'el último mes completo')+', habéis gastado más de lo que ingresabais, unos <b>'+eur0(-a.ahorro.eur)+'</b> al mes.':'De media ahorráis un <b>'+p+' %</b> de lo que ingresáis, unos <b>'+eur0(a.ahorro.eur)+'</b> al mes.')+'</p>'+cnBarra(Math.max(0,p)/20*100,'var(--'+(p>=10?'pos':p>=0?'warn':'neg')+')')+'<div class="cn-scale"><span>0 %</span><span>Meta habitual: 20 %</span></div>';
     if(a.ahorro.vari>=100&&np!==null)cu+=cnTip('Recortando un <b>10 %</b> en lo variable (unos <b>'+eur0(corte)+'</b> al mes) pasaríais a ahorrar <b>'+eur0(nuevo)+'</b> al mes, el <b>'+np+' %</b>.');
     h+=cnCard('#2D8C7A',ICONOS.inversion[1],'Vuestro ahorro',cnTag(k[0],k[1]),cu);
   }
   // Colchón
   if(a.colchon){
-    const mS=a.colchon.meses,k=mS>=6?['ok','Muy bien']:mS>=3?['info','Bien']:mS>=1?['warn','Mejorable']:['bad','Atención'];
-    const mt=mS.toLocaleString('es-ES',{maximumFractionDigits:1});
-    const falta=Math.max(0,3*a.colchon.gm-a.colchon.saldo);
-    let cu='<p>Con lo que hay en vuestras cuentas ('+eur0(a.colchon.saldo)+') podríais vivir <b>'+mt+' mes'+(Math.abs(mS-1)<0.05?'':'es')+'</b> sin ingresos, con un gasto de unos '+eur0(a.colchon.gm)+' al mes.</p>'+cnBarra(mS/6*100,'var(--'+(mS>=3?'pos':mS>=1?'warn':'neg')+')')+'<div class="cn-scale"><span>0</span><span>Recomendado: 3 a 6 meses</span></div>';
-    if(falta>0){const ms=a.ahorro&&a.ahorro.eur>0?Math.ceil(falta/a.ahorro.eur):null;cu+='<p class="small muted" style="margin:8px 0 0">Os faltan unos <b style="color:var(--ink)">'+eur0(falta)+'</b> para llegar a 3 meses'+(ms?'. A vuestro ritmo de ahorro, unos '+ms+' mes'+(ms>1?'es':'')+'.':'.')+'</p>'}
-    h+=cnCard('#2E8FA3',ICONOS.mutua[1],'Vuestro colchón',cnTag(k[0],k[1]),cu);
+    const C=a.colchon,quien=C.soloAhorro?'vuestro ahorro':'vuestras cuentas';
+    if(C.meses===null){
+      h+=cnCard('#2E8FA3',ICONOS.mutua[1],'Vuestro colchón',cnTag('info','Pronto'),'<p>Tenéis <b>'+eur0(C.saldo)+'</b> en '+quien+'. Todavía no puedo decir para cuántos meses da, porque aún no hay un mes completo ni bastantes gastos de este mes. Se calculará solo en cuanto haya datos.</p>');
+    }else{
+      const mS=C.meses,k=mS>=6?['ok','Muy bien']:mS>=3?['info','Bien']:mS>=1?['warn','Mejorable']:['bad','Atención'];
+      const mt=mS.toLocaleString('es-ES',{maximumFractionDigits:1});
+      const falta=Math.max(0,3*C.gm-C.saldo);
+      const dec=C.fuente==='meses'?'la media de vuestros últimos '+a.prevC.length+' meses completos':C.fuente==='mes'?'lo previsto para este mes (se afinará cuando haya más meses completos)':'vuestros recibos fijos (el mínimo que se paga cada mes)';
+      let cu='<p>Con lo que hay en '+quien+' ('+eur0(C.saldo)+') podríais vivir <b>'+mt+' mes'+(Math.abs(mS-1)<0.05?'':'es')+'</b> sin ingresos, con un gasto de unos '+eur0(C.gm)+' al mes, según '+dec+'.</p>'+cnBarra(mS/6*100,'var(--'+(mS>=3?'pos':mS>=1?'warn':'neg')+')')+'<div class="cn-scale"><span>0</span><span>Recomendado: 3 a 6 meses</span></div>';
+      if(falta>0){const ms=a.ahorro&&a.ahorro.eur>0?Math.ceil(falta/a.ahorro.eur):null;cu+='<p class="small muted" style="margin:8px 0 0">Os faltan unos <b style="color:var(--ink)">'+eur0(falta)+'</b> para llegar a 3 meses'+(ms?'. A vuestro ritmo de ahorro, unos '+ms+' mes'+(ms>1?'es':'')+'.':'.')+'</p>'}
+      cu+=cnTip('El colchón no es para gastarlo: lo ideal es que cada mes crezca con lo que sobra.');
+      h+=cnCard('#2E8FA3',ICONOS.mutua[1],'Vuestro colchón',cnTag(k[0],k[1]),cu);
+    }
   }else{
-    h+=cnCard('#2E8FA3',ICONOS.mutua[1],'Vuestro colchón',cnTag('info','Falta el saldo'),'<p class="muted" style="margin:10px 0 0">Poned el saldo de vuestras cuentas en Ajustes y os diré cuántos meses podríais vivir con lo que tenéis.</p><button class="btn sm ghost" style="margin-top:10px;display:block" onclick="ir(\'ajustes\')">Poner saldo</button>');
+    h+=cnCard('#2E8FA3',ICONOS.mutua[1],'Vuestro colchón',cnTag('info','Falta el saldo'),'<p class="muted" style="margin:10px 0 0">Poned el saldo de vuestra cuenta de ahorro en Ajustes (con el tipo «Ahorro») y os diré cuántos meses podríais vivir con lo que tenéis.</p><button class="btn sm ghost" style="margin-top:10px;display:block" onclick="ir(\'ajustes\')">Poner saldo</button>');
   }
   h+='<p class="cn-aviso">Son orientaciones calculadas con vuestros propios apuntes, en este móvil. No son asesoramiento financiero profesional.</p>';
   return h;
