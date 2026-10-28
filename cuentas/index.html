@@ -383,8 +383,8 @@ function finBienvenida(a){
 }
 let volver=null; // pantalla de la que venimos al abrir una categoría (para poder volver)
 function ir(v){if(vista==='apuntar'&&$('#fImp'))leerForm();if(v!=='movs')volver=null;vista=v;render();window.scrollTo(0,0)}
-function verSinClas(){const l=movs.filter(m=>!m.borrado&&m.categoria==='sin_clasificar').map(m=>mesCont(m)).sort();const u=(l[l.length-1]||'').split('-');if(u.length===2)vm={y:+u[0],m:+u[1]-1};verCat('sin_clasificar')}
-function verCat(id){if(vista!=='movs')volver={vista,y:vm.y,m:vm.m,modo:modoRes};filtroCat=id;filtroTxt='';ir('movs')}
+function verSinClas(){if(vista!=='movs')volver={vista,y:vm.y,m:vm.m,modo:modoRes};const l=movs.filter(m=>!m.borrado&&m.categoria==='sin_clasificar').map(m=>mesCont(m)).sort();const u=(l[l.length-1]||'').split('-');if(u.length===2)vm={y:+u[0],m:+u[1]-1};verCat('sin_clasificar')}
+function verCat(id){if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};filtroCat=id;filtroTxt='';ir('movs')}
 function volverDeCat(){const v=volver;volver=null;filtroCat='';filtroTxt='';if(!v){ir('resumen');return}vm={y:v.y,m:v.m};modoRes=v.modo;ir(v.vista)}
 function render(sinGuardarForm){
   if(bienv){$('#app').innerHTML=vBienvenida();document.querySelector('.nav').style.display='none';return}
@@ -767,6 +767,7 @@ function bancoDeTexto(texto){
 }
 
 /* ===================== APUNTAR ===================== */
+function fTocar(){form.fTocada=1}
 function leerForm(){form.imp=$('#fImp').value;form.nota=$('#fNota').value;if(form.fTocada)form.fecha=$('#fFecha').value;else form.fecha='';form.quien=$('#fQuien').value}
 function vApuntar(){
   const grid=(g,extra)=>'<div class="grid">'+visibles(g).map(c=>'<button class="cat'+(form.cat===c.id?' on':'')+(modoQuitar?' quitar':'')+'" onclick="tocarCat(\''+c.id+'\')" onpointerdown="lpIni(\''+c.id+'\')" onpointerup="lpFin()" onpointerleave="lpFin()" onpointercancel="lpFin()" oncontextmenu="return false">'+icoCat(c)+(modoQuitar?'<span class="menos" aria-hidden="true">−</span>':'')+'<small>'+esc(c.nombre)+'</small></button>').join('')
@@ -781,7 +782,7 @@ function vApuntar(){
   return tarjetaSaldo(true)+'<section class="card"><div class="seg"><button class="'+(form.tipo==='gasto'?'on':'')+'" onclick="setTipo(\'gasto\')">➖ Gasto</button><button class="'+(form.tipo==='ingreso'?'on':'')+'" onclick="setTipo(\'ingreso\')">➕ Ingreso</button></div>'
    +'<div class="amount"><input id="fImp" inputmode="decimal" placeholder="0,00" autocomplete="off" value="'+esc(form.imp)+'" onkeydown="if(event.key===\'Enter\')guardar()"><span>€</span></div>'
    +atajos+botonTicket()+cats+subs
-   +'<div class="row2"><label>Fecha<input type="date" id="fFecha" onchange="form.fTocada=1" value="'+esc(form.fecha||hoy())+'"></label><label>Quién<select id="fQuien">'+personasOpts(form.quien||yo)+'</select></label></div>'
+   +'<div class="row2"><label>Fecha<input type="date" id="fFecha" onchange="fTocar()" value="'+esc(form.fecha||hoy())+'"></label><label>Quién<select id="fQuien">'+personasOpts(form.quien||yo)+'</select></label></div>'
    +'<label>Nota (opcional)<input id="fNota" placeholder="Ej: Mercadona, regalo cumple…" value="'+esc(form.nota)+'"></label>'
    +'<button class="btn" onclick="guardar()">Guardar</button></section>'
 ;
@@ -1330,7 +1331,7 @@ function resumenAno(){
 
 /* ===================== IMPORTAR EXTRACTOS ===================== */
 const STOP=new Set(['COMPRA','COMPRAS','TARJ','TARJETA','PAGO','PAGOS','CON','DEL','LOS','LAS','RECIBO','RECIBOS','TRANSF','TRANSFERENCIA','CARGO','ADEUDO','OPERACION','CONTACTLESS','APPLE','GOOGLE','PAY','BIZUM','ESP','PALMA','MALLORCA','CARD','TRANSACTION','PURCHASE','DEBITO','CREDITO','VISA','MASTERCARD','FECHA','REF','REFERENCIA','EUR','ENVIADO','RECIBIDO','INMEDIATA','FAVOR','MOVIL','COMERCIO','EXTRANJERO','CLIENTES','ORDENANTE','BENEFICIARIO','CONCEPTO','NOMINA','TRASPASO','ENVIO','COBRO','PAGADO']);
-function claveConcepto(con){return palabras(con).filter(w=>w.length>=3&&!/\d/.test(w)&&!STOP.has(w)).slice(0,2).join(' ')}
+function claveConcepto(con){const k=palabras(con).filter(w=>w.length>=3&&!/\d/.test(w)&&!STOP.has(w)&&!/^(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE|CUENTA)$/.test(w)).slice(0,2).join(' ');return k||palabras(con).filter(w=>w.length>=3&&!/\d/.test(w)).slice(0,2).join(' ')}
 function sugerir(con){
   const ws=new Set(palabras(con));
   for(const r of cfg.reglas){const rp=palabras(r.texto);if(rp.length&&rp.every(p=>ws.has(p)||[...ws].some(w=>w.startsWith(p)&&p.length>=7)))return r.cat}
