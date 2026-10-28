@@ -981,7 +981,7 @@ function quedaMes(){
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
   const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&String(x.fecha).startsWith(pref)).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,partes,saldo,fijos,sinImporte,queda,dias,delAhorro,porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:d.getDate()/fin};
+  return {cuenta:bk,partes,saldo,fijos,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:d.getDate()/fin};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
 function anilloQueda(q,col,px,centro){
@@ -998,14 +998,15 @@ function anilloQueda(q,col,px,centro){
 function tarjetaSaldo(compacta){
   const q=quedaMes();
   if(!q)return '<section class="card small"><b>💶 ¿Cuánto os queda este mes?</b><br><span class="muted">Pon el saldo de hoy de la cuenta de casa (y de la tuya) y la app lo llevará al día.</span><button class="btn sm ghost" style="margin-top:8px;display:block" onclick="ir(\'ajustes\')">Poner saldo</button></section>';
-  const col=q.queda<0?'var(--neg)':q.consumo>q.ritmo+0.1?'var(--warn)':'var(--pos)';
-  const aviso=q.queda<0?'No llega para los recibos que quedan: habría que tirar de otra cuenta.':q.consumo>q.ritmo+0.1?'Vais gastando más deprisa de lo que avanza el mes.':'Vais bien de ritmo.';
+  const dep=q.delAhorro>0&&q.queda>=0&&q.propio<0; // llega a fin de mes solo gracias al dinero sacado del ahorro
+  const col=q.queda<0||dep?'var(--neg)':q.consumo>q.ritmo+0.1?'var(--warn)':'var(--pos)';
+  const aviso=q.queda<0?'No llega para los recibos que quedan: habría que tirar de otra cuenta.':dep?'Llegáis a fin de mes solo gracias al dinero sacado del ahorro.':q.consumo>q.ritmo+0.1?'Vais gastando más deprisa de lo que avanza el mes.':'Vais bien de ritmo.';
   const barra='<div class="bar" style="position:relative;height:10px"><i style="width:'+Math.min(100,q.consumo*100)+'%;background:'+col+'"></i><b title="Hoy" style="position:absolute;top:0;bottom:0;left:'+Math.min(100,q.ritmo*100)+'%;width:2px;background:var(--ink)"></b></div>';
   const grande='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span>'+(q.queda<0?'Faltan':'Os quedan')+'</span><b style="font-size:26px;color:'+col+';font-variant-numeric:tabular-nums">'+eur(Math.abs(q.queda))+'</b></div>';
   const imp=(q.queda<0?'−':'')+Math.round(Math.abs(q.queda)).toLocaleString('es-ES')+' €';
   const centro='<text x="50" y="'+(q.queda>0?52:56)+'" text-anchor="middle" font-size="'+(imp.length>7?14:16.5)+'" font-weight="800" fill="'+col+'">'+imp+'</text>'+(q.queda>0?'<text x="50" y="65" text-anchor="middle" font-size="8.5" fill="var(--muted)">'+Math.round(q.porDia)+' € al día</text>':'');
   const ring=anilloQueda(q,col,compacta?168:132,centro);
-  const cab='<div style="display:flex;align-items:center;gap:14px">'+ring+'<div style="min-width:0;flex:1"><div style="font-weight:600;color:'+col+'">'+aviso+'</div><div class="small muted" style="margin-top:4px">'+(q.queda<0?'Faltan '+eur(-q.queda)+' para los recibos.':'Quedan '+q.dias+' día'+(q.dias>1?'s':'')+' de mes.')+'</div></div></div>';
+  const cab='<div style="display:flex;align-items:center;gap:14px">'+ring+'<div style="min-width:0;flex:1"><div style="font-weight:600;color:'+col+'">'+aviso+'</div><div class="small muted" style="margin-top:4px">'+(q.queda<0?'Faltan '+eur(-q.queda)+' para los recibos.':dep?'Sin los '+eur(q.delAhorro)+' del ahorro os faltarían '+eur(-q.propio)+'.':'Quedan '+q.dias+' día'+(q.dias>1?'s':'')+' de mes.')+'</div></div></div>';
   if(compacta)return '<section class="card anillo" role="button" aria-label="Ver el detalle de lo que queda" onclick="modoRes=\'mes\';vm={y:new Date().getFullYear(),m:new Date().getMonth()};ir(\'resumen\')">'+ring+'</section>';
   const tr=cuentasVis().find(c=>c.tipo==='ahorro'&&saldoCuenta(c)!==null),st=saldoCuenta(tr);
   const linea=(a,b,extra)=>'<div class="bhead" style="padding:4px 0"><span>'+a+'</span><span'+(extra||'')+'>'+b+'</span></div>';
@@ -1014,7 +1015,7 @@ function tarjetaSaldo(compacta){
    +linea('Recibos fijos que faltan por cobrar','− '+eur(q.fijos))
    +linea('<b>Para gastar hasta fin de mes</b>','<b>'+eur(q.queda)+'</b>')
    +(q.sinImporte.length?'<p class="small muted">Sin importe todavía: '+q.sinImporte.map(esc).join(', ')+'. Cuando llegue la factura, apúntala.</p>':'')
-   +(q.delAhorro>0?'<p class="small" style="margin-top:8px;color:var(--warn)"><b>⚠️ Sacado del ahorro este mes: '+eur(q.delAhorro)+'</b>. Es dinero que en principio no se toca.</p>':'')
+   +(q.delAhorro>0?'<p class="small" style="margin-top:8px;color:var(--warn)"><b>⚠️ Sacado del ahorro este mes: '+eur(q.delAhorro)+'</b>. Es dinero que en principio no se toca.'+(q.queda>=0?' Sin él, os '+(q.propio<0?'faltarían '+eur(-q.propio):'quedarían '+eur(q.propio))+'.':'')+'</p>':'')
    +(st!==null?'<p class="small muted" style="margin-top:8px">🏦 Ahorro en '+esc(tr.nombre)+': <b>'+eur(st)+'</b></p>':'')
    +'<p class="small muted">Saldo puesto el '+fechaCorta(q.cuenta.fecha)+'. <a href="#" onclick="ir(\'ajustes\');return false">Actualizar</a></p></section>';
 }
