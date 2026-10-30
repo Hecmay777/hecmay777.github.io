@@ -277,6 +277,7 @@ function defaultCfg(){
     ],
     cuentas:[{id:'k_casa',nombre:'Cuenta de casa',tipo:'dia',banco:'otro',persona:'',saldo:null,fecha:'',ts:0}],
     nominaSig:{dia:20},
+    cierre:{dia:28},
     personas:['Persona 1','Persona 2'],
     modificado:0
   };
@@ -295,6 +296,7 @@ function asegurarCats(c){
     c.cats.splice(pos,0,d);cambio=true;
   });
   if(!c.nominaSig){c.nominaSig={dia:20};cambio=true}
+  if(!c.cierre){c.cierre={dia:28};cambio=true}
   if((Number(c.fijosV)||0)<2){c.fijosV=2;cambio=true}
   if(!Array.isArray(c.cuentas))c.cuentas=[];
   if(!c.cuentas.length){c.cuentas=defaultCfg().cuentas;cambio=true} // las cuentas ya las gestiona cada uno
@@ -309,7 +311,7 @@ let sync=store.get('cc_sync',{url:'',clave:'',desde:0,ultimaOk:0,error:''});
 let yo=store.get('cc_yo',null)||cfg.personas[0];
 let vista='apuntar';
 const ahoraD=new Date();
-let vm={y:ahoraD.getFullYear(),m:ahoraD.getMonth()};
+let vm=mesContHoy();
 let modoRes='mes';
 let form={tipo:'gasto',cat:null,sub:'',imp:'',nota:'',fecha:'',quien:''};
 let filtroTxt='',filtroCat='';
@@ -330,10 +332,22 @@ function updMov(id,ch){const m=movs.find(x=>x.id===id);if(!m)return;Object.assig
 
 /* Mes en el que cuenta un apunte: las nóminas cobradas a final de mes cuentan para el mes siguiente */
 const esNomina=m=>m.tipo==='ingreso'&&/^nomina/.test(String(m.categoria||''));
+/* Mes contable: empieza el día «cierre» del mes anterior y acaba el día antes del cierre (con cierre 28: del 28 oct al 27 nov es noviembre). Con 0 se usan meses naturales */
+function diaCierre(){const d=Number((cfg.cierre||{}).dia);return d>=2&&d<=28?d:0}
+function mesDeFecha(f){f=String(f);const y=+f.slice(0,4),mm=+f.slice(5,7),dd=+f.slice(8,10),c=diaCierre();if(c&&dd>=c)return mm===12?(y+1)+'-01':y+'-'+pad(mm+1);return f.slice(0,7)}
+function mesContHoy(){const s=mesDeFecha(hoy());return {y:+s.slice(0,4),m:+s.slice(5,7)-1}}
+function vmDeFecha(f){const s=mesDeFecha(f);return {y:+s.slice(0,4),m:+s.slice(5,7)-1}}
+function diasEntre(a,b){const q=x=>{const p=String(x).split('-');return Date.UTC(+p[0],+p[1]-1,+p[2])};return Math.round((q(b)-q(a))/864e5)}
+function periodo(y,m){
+  const c=diaCierre();let ini,fin;
+  if(c){const a=new Date(y,m-1,c),b=new Date(y,m,c-1);ini=ymd(a);fin=ymd(b)}
+  else{ini=y+'-'+pad(m+1)+'-01';fin=y+'-'+pad(m+1)+'-'+pad(new Date(y,m+1,0).getDate())}
+  return {ini,fin,dias:diasEntre(ini,fin)+1};
+}
 function mesCont(m){
   const f=String(m.fecha),dia=Number((cfg.nominaSig||{}).dia)||0;
   if(dia&&esNomina(m)&&Number(f.slice(8,10))>=dia){const y=+f.slice(0,4),mm=+f.slice(5,7);return mm===12?(y+1)+'-01':y+'-'+pad(mm+1)}
-  return f.slice(0,7);
+  return mesDeFecha(f);
 }
 const deMes=(y,m)=>{const p=y+'-'+pad(m+1);return movs.filter(x=>!x.borrado&&mesCont(x)===p)};
 const deAno=y=>movs.filter(x=>!x.borrado&&mesCont(x).startsWith(y+'-'));
@@ -427,8 +441,11 @@ function toast(msg,deshacer){
 function abrir(){$('#modal').classList.remove('hidden')}
 function cerrar(){$('#modal').classList.add('hidden')}
 function monthNav(){
-  const etiqueta=modoRes==='ano'&&vista==='resumen'?String(vm.y):MESES[vm.m]+' '+vm.y;
-  return '<div class="mnav"><button onclick="mover(-1)" aria-label="Anterior">‹</button><b>'+etiqueta+'</b><button onclick="mover(1)" aria-label="Siguiente">›</button></div>';
+  const ano=modoRes==='ano'&&vista==='resumen';
+  const etiqueta=ano?String(vm.y):MESES[vm.m]+' '+vm.y;
+  const pe=!ano&&diaCierre()?periodo(vm.y,vm.m):null;
+  const sub=pe?'<small style="display:block;font-weight:500;font-size:11px;color:var(--muted)">'+fechaCorta(pe.ini)+' – '+fechaCorta(pe.fin)+'</small>':'';
+  return '<div class="mnav"><button onclick="mover(-1)" aria-label="Anterior">‹</button><b>'+etiqueta+sub+'</b><button onclick="mover(1)" aria-label="Siguiente">›</button></div>';
 }
 function mover(d){
   if(modoRes==='ano'&&vista==='resumen'){vm.y+=d}
@@ -622,7 +639,7 @@ function guardarTicket(){
   else filas=on.map(i=>({cat:i.cat,importe:i.importe,nota:pre+i.desc}));
   filas.forEach((f,k)=>{const m=nuevoMov({fecha:tk.fecha,tipo:'gasto',importe:f.importe,categoria:f.cat,nota:f.nota,quien:yo,origen:'ticket',importKey:key+'#'+(k+1)});if(tk.cuenta)m.cuenta=tk.cuenta;movs.push(m)});
   saveMovs();programarSync();cerrar();
-  const u=tk.fecha.split('-');vm={y:+u[0],m:+u[1]-1};vista='movs';render();
+  vm=vmDeFecha(tk.fecha);vista='movs';render();
   toast(filas.length+' apuntes guardados ('+eur(s)+')');
 }
 /* Más tarde, al importar el extracto del banco, el cargo único del ticket se reconoce como ya apuntado */
@@ -716,7 +733,7 @@ function guardarCompra(){
   const m=nuevoMov({fecha:cp.fecha,tipo:cp.tipo,importe:cp.importe,categoria:cp.cat,nota:[cp.comercio,cp.nota].filter(Boolean).join(' · '),quien:yo,origen:'captura',importKey:'tk|'+cp.fecha+'|'+cp.importe.toFixed(2)+'#1'});
   if(cp.cuenta)m.cuenta=cp.cuenta;movs.push(m);
   saveMovs();programarSync();cerrar();
-  const u=cp.fecha.split('-');vm={y:+u[0],m:+u[1]-1};vista='movs';render();
+  vm=vmDeFecha(cp.fecha);vista='movs';render();
   toast('Guardado: '+catById(m.categoria).nombre+' '+eur(m.importe),()=>{updMov(m.id,{borrado:true});render()});
 }
 /* ¿Ya hay algo apuntado con ese importe cerca de esa fecha? (a mano, de un ticket anterior o importado del banco) */
@@ -960,7 +977,7 @@ function saldoCuenta(c){
   return r2(s);
 }
 function quedaMes(){
-  const d=new Date(),y=d.getFullYear(),m=d.getMonth();
+  const d=new Date(),mc=mesContHoy(),y=mc.y,m=mc.m,pe=periodo(y,m);
   const bk=cuentaDia();
   if(saldoCuenta(bk)===null)return null;
   // Dinero para el mes: la cuenta de casa + las cuentas personales (de ahí se pasa a casa); el ahorro va aparte
@@ -973,18 +990,18 @@ function quedaMes(){
   // Recibos ya apuntados para más adelante este mes (aún no cobrados) + los que faltan por apuntar
   const pref0=y+'-'+pad(m+1),h0=hoy();
   const refF=id=>(incl.find(c=>c.id===id)||{}).fecha||'';
-  const futuros=movs.filter(x=>!x.borrado&&ids.has(cuentaDe(x))&&x.tipo==='gasto'&&!(x.categoria&&catById(x.categoria).grupo==='neutro')&&String(x.fecha).startsWith(pref0)&&x.fecha>h0&&x.fecha>refF(cuentaDe(x))).reduce((a,x)=>a+x.importe,0);
+  const futuros=movs.filter(x=>!x.borrado&&ids.has(cuentaDe(x))&&x.tipo==='gasto'&&!(x.categoria&&catById(x.categoria).grupo==='neutro')&&x.fecha>=pe.ini&&x.fecha<=pe.fin&&x.fecha>h0&&x.fecha>refF(cuentaDe(x))).reduce((a,x)=>a+x.importe,0);
   const fijos=r2(futuros+pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0));
   const sinImporte=pend.filter(f=>!f.sugerido&&!f.porcentaje).map(f=>catById(f.cat).nombre);
   const pendA=r2(movs.filter(x=>pendAmazon(x)&&ids.has(cuentaDe(x))).reduce((a,x)=>a+x.importe,0));
   const queda=r2(saldo-fijos-pendA);
-  const fin=new Date(y,m+1,0).getDate(),dias=fin-d.getDate()+1;
+  const fin=pe.dias,dias=Math.max(1,diasEntre(hoy(),pe.fin)+1);
   const gastado=Math.max(0,t.gastos);
   const total=gastado+Math.max(queda,0);
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
-  const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&String(x.fecha).startsWith(pref)).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,partes,saldo,fijos,pendA,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:d.getDate()/fin};
+  const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin).reduce((a,x)=>a+x.importe,0));
+  return {cuenta:bk,partes,saldo,fijos,pendA,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
 function anilloQueda(q,col,px,centro){
@@ -1010,7 +1027,7 @@ function tarjetaSaldo(compacta){
   const centro='<text x="50" y="'+(q.queda>0?52:56)+'" text-anchor="middle" font-size="'+(imp.length>7?14:16.5)+'" font-weight="800" fill="'+col+'">'+imp+'</text>'+(q.queda>0?'<text x="50" y="65" text-anchor="middle" font-size="8.5" fill="var(--muted)">'+Math.round(q.porDia)+' € al día</text>':'');
   const ring=anilloQueda(q,col,compacta?168:132,centro);
   const cab='<div style="display:flex;align-items:center;gap:14px">'+ring+'<div style="min-width:0;flex:1"><div style="font-weight:600;color:'+col+'">'+aviso+'</div><div class="small muted" style="margin-top:4px">'+(q.queda<0?'Faltan '+eur(-q.queda)+' para los recibos.':dep?'Sin los '+eur(q.delAhorro)+' del ahorro os faltarían '+eur(-q.propio)+'.':'Quedan '+q.dias+' día'+(q.dias>1?'s':'')+' de mes.')+'</div></div></div>';
-  if(compacta)return '<section class="card anillo" role="button" aria-label="Ver el detalle de lo que queda" onclick="modoRes=\'mes\';vm={y:new Date().getFullYear(),m:new Date().getMonth()};ir(\'resumen\')">'+ring+'</section>';
+  if(compacta)return '<section class="card anillo" role="button" aria-label="Ver el detalle de lo que queda" onclick="modoRes=\'mes\';vm=mesContHoy();ir(\'resumen\')">'+ring+'</section>';
   const tr=cuentasVis().find(c=>c.tipo==='ahorro'&&saldoCuenta(c)!==null),st=saldoCuenta(tr);
   const linea=(a,b,extra)=>'<div class="bhead" style="padding:4px 0"><span>'+a+'</span><span'+(extra||'')+'>'+b+'</span></div>';
   return '<section class="card"><h2>💶 Lo que os queda este mes</h2>'+cab+'<div style="height:10px"></div>'
@@ -1075,9 +1092,11 @@ function mesesAntes(y,m,n){
 }
 function analisisConsejos(y,m,ahora){
   const d=ahora||new Date();
-  const actual=d.getFullYear()===y&&d.getMonth()===m;
-  const dias=new Date(y,m+1,0).getDate();
-  const dia=actual?d.getDate():dias;
+  const mh=mesDeFecha(ymd(d));
+  const actual=+mh.slice(0,4)===y&&+mh.slice(5,7)-1===m;
+  const pe=periodo(y,m);
+  const dias=pe.dias;
+  const dia=actual?Math.max(1,Math.min(dias,diasEntre(pe.ini,ymd(d))+1)):dias;
   const list=deMes(y,m),t=calc(list);
   const prev=mesesAntes(y,m,6);
   // Un mes cuenta para las medias solo si está completo: gastos apuntados en 10 días o más y repartidos por el mes (no el de cuando empezasteis a usar la app)
@@ -1257,7 +1276,7 @@ function resumenMes(){
   const pm=vm.m===0?{y:vm.y-1,m:11}:{y:vm.y,m:vm.m-1};
   const tp=calc(deMes(pm.y,pm.m));
   let h='<div class="kpis"><div class="kpi"><small>Ingresos</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi"><small>Gastos</small><b>'+eur(t.gastos)+'</b></div><div class="kpi"><small>Ahorro</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>';
-  const hoyD=new Date();if(vm.y===hoyD.getFullYear()&&vm.m===hoyD.getMonth())h+=tarjetaSaldo(false);
+  const mh=mesContHoy();if(vm.y===mh.y&&vm.m===mh.m)h+=tarjetaSaldo(false);
   const pend=pendientesFijos(vm.y,vm.m,t);
   if(pend.length){
     h+='<section class="card"><h2>Recibos fijos sin apuntar</h2><p class="muted small" style="margin-top:-6px">Confirma el importe y pulsa ✓. Si un mes no toca, ignóralo.</p>'
@@ -1299,7 +1318,7 @@ function ultimoImporteBanco(cat,antesDe){
 }
 function generarFijos(){
   if(sync.url&&sync.clave&&!syncSesion)return; // primero hay que traer lo que ya hay en la hoja, para no repetir recibos
-  const d=new Date(),y=d.getFullYear(),m=d.getMonth(),ym=y+'-'+pad(m+1),fin=new Date(y,m+1,0).getDate();
+  const mc=mesContHoy(),y=mc.y,m=mc.m,ym=y+'-'+pad(m+1),cc=diaCierre();
   let cambio=false;
   (cfg.fijos||[]).forEach(f=>{
     if(!f.dia||(f.mes&&f.mes!==m+1))return;
@@ -1310,10 +1329,10 @@ function generarFijos(){
       if(f.porcentaje&&!ex.borrado&&String(ex.nota).endsWith(AUTO)){const v=r2(ingresos()*f.porcentaje/100);if(v>0&&Math.abs(v-ex.importe)>=0.01){Object.assign(ex,{importe:v,modificado:Date.now(),pend:true});cambio=true}}
       return;
     }
-    if(movs.some(x=>!x.borrado&&x.categoria===f.cat&&String(x.fecha).startsWith(ym)))return; // ya está (banco o a mano)
+    if(movs.some(x=>!x.borrado&&x.categoria===f.cat&&mesCont(x)===ym))return; // ya está (banco o a mano)
     let imp=f.porcentaje?r2(ingresos()*f.porcentaje/100):(f.auto==='ultimo'?(ultimoImporteBanco(f.cat,ym)??f.importe):f.importe);
     if(!imp||imp<=0)return;
-    const mv=nuevoMov({fecha:ym+'-'+pad(Math.min(f.dia,fin)),tipo:'gasto',importe:imp,categoria:f.cat,nota:(f.porcentaje?'Diezmo '+f.porcentaje+' %':'Recibo fijo')+AUTO,quien:yo,origen:'fijo'});
+    const fy=(cc&&f.dia>=cc)?(m===0?y-1:y):y,fm=(cc&&f.dia>=cc)?(m===0?11:m-1):m,mv=nuevoMov({fecha:fy+'-'+pad(fm+1)+'-'+pad(Math.min(f.dia,new Date(fy,fm+1,0).getDate())),tipo:'gasto',importe:imp,categoria:f.cat,nota:(f.porcentaje?'Diezmo '+f.porcentaje+' %':'Recibo fijo')+AUTO,quien:yo,origen:'fijo'});
     mv.id=id;movs.push(mv);cambio=true;
   });
   if(cambio){saveMovs();programarSync()}
@@ -1321,7 +1340,7 @@ function generarFijos(){
 function apuntarFijo(fid){
   const f=cfg.fijos.find(x=>x.id===fid);if(!f)return;
   const v=parseNum($('#p_'+fid).value);if(!v){toast('Escribe el importe');return}
-  const esteMes=vm.y===new Date().getFullYear()&&vm.m===new Date().getMonth();
+  const mh=mesContHoy(),esteMes=vm.y===mh.y&&vm.m===mh.m;
   const fecha=esteMes?hoy():vm.y+'-'+pad(vm.m+1)+'-01';
   addMov({fecha,tipo:'gasto',importe:v,categoria:f.cat,nota:'Recibo fijo',quien:yo,origen:'fijo'});
   render();toast(catById(f.cat).nombre+' apuntado');
@@ -1701,7 +1720,7 @@ function importarSeleccion(){
   }
   {const c=cuentaImp();if(c&&imp.iban4&&!c.iban4&&!cfg.cuentas.some(x=>x.iban4===imp.iban4)){c.iban4=imp.iban4;saveCfg()}} // la próxima vez reconoce esta cuenta sola
   if(ligados){saveMovs();programarSync()}
-  if(sel.length){saveMovs();programarSync();const ult=sel[sel.length-1].fecha.split('-');vm={y:+ult[0],m:+ult[1]-1};vista='movs'}else vista='resumen';
+  if(sel.length){saveMovs();programarSync();vm=vmDeFecha(sel[sel.length-1].fecha);vista='movs'}else vista='resumen';
   imp={banco:imp.banco,raw:null,map:null,filas:[],nombre:'',pdfFin:null};
   render();toast(msg);
 }
@@ -1714,6 +1733,7 @@ function vAjustes(){
   const mesOpts=sel=>'<option value="0">Cada mes</option>'+MESES.map((m,i)=>'<option value="'+(i+1)+'"'+(sel===i+1?' selected':'')+'>Solo '+m.toLowerCase()+'</option>').join('');
   return '<section class="card"><h2>¿Quién usa este móvil?</h2><div class="seg">'+cfg.personas.map((p,i)=>'<button class="'+(yo===p?'on':'')+'" onclick="setYo('+i+')">'+esc(p)+'</button>').join('')+'</div><p class="muted small">Los apuntes se marcan con este nombre.</p><details><summary class="small">Cambiar los nombres</summary><div class="row2">'+cfg.personas.map((p,i)=>'<input value="'+esc(p)+'" aria-label="Nombre '+(i+1)+'" onchange="renombrarPersona('+i+',this.value)">').join('')+'</div></details></section>'
   +'<section class="card"><h2>💼 Nóminas</h2><p class="muted small" style="margin-top:-4px">Las nóminas que entran a partir de este día cuentan para el mes siguiente (con ellas vivís el mes que empieza). Pon 0 para desactivarlo.</p><label>A partir del día<input type="number" min="0" max="31" inputmode="numeric" value="'+(Number((cfg.nominaSig||{}).dia)||0)+'" onchange="cfg.nominaSig={dia:Math.max(0,Math.min(31,parseInt(this.value)||0))};saveCfg();render()"></label></section>'
+  +'<section class="card"><h2>📅 Mes contable</h2><p class="muted small" style="margin-top:-4px">El mes empieza este día del mes anterior y acaba el día antes. Con 28: noviembre va del 28 de octubre al 27 de noviembre. Pon 0 para usar meses naturales (del 1 al 31).</p><label>Empieza el día<input type="number" min="0" max="28" inputmode="numeric" value="'+(diaCierre())+'" onchange="var v=parseInt(this.value)||0;cfg.cierre={dia:(v>=2&&v<=28)?v:0};saveCfg();vm=mesContHoy();render()"></label></section>'
   +seccionCuentas()
 
   +'<section class="card"><h2>☁️ Copia en la nube (Google)</h2><p class="small muted" style="margin-top:-4px">Estado: '+(sync.url?(sync.error?'<b style="color:var(--neg)">error: '+esc(sync.error)+'</b>':'conectado · última vez '+ultima):'sin conectar · los datos solo están en este móvil')+'</p>'
