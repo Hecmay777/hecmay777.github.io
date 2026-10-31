@@ -952,6 +952,18 @@ function vMovs(){
 }
 
 /* ===================== RESUMEN ===================== */
+/* Gastos que salen todos los meses (en los 3 meses anteriores) pero aún no este mes: poco frecuentes (no súper ni gasolina) y de importe parecido. Es una estimación */
+function habituales(y,m){
+  const per=[];for(let k=1;k<=3;k++){let yy=y,mm=m-k;while(mm<0){mm+=12;yy--}per.push([yy,mm])}
+  const hist=per.map(([a,b])=>{const t={},n={};deMes(a,b).forEach(x=>{const g=catById(x.categoria).grupo;if(g!=='variable'&&g!=='fijo')return;t[x.categoria]=(t[x.categoria]||0)+(x.tipo==='gasto'?x.importe:-x.importe);n[x.categoria]=(n[x.categoria]||0)+1});return {t,n}}).filter(o=>Object.keys(o.t).length);
+  if(hist.length<2)return [];
+  const ya=new Set(deMes(y,m).map(x=>x.categoria)),fij=new Set(cfg.fijos.map(f=>f.cat));
+  return Object.keys(hist[0].t).filter(c=>c!=='extras'&&c!=='sin_clasificar'&&!ya.has(c)&&!fij.has(c)&&hist.every(o=>o.t[c]>0&&o.n[c]<=2)).map(c=>{
+    const v=hist.map(o=>o.t[c]).sort((a,b)=>a-b);
+    if(v[v.length-1]/v[0]>1.6)return null;
+    return {cat:c,importe:r2(v[Math.floor(v.length/2)])};
+  }).filter(Boolean).sort((a,b)=>b.importe-a.importe);
+}
 function pendientesFijos(y,m,t){
   const list=deMes(y,m);
   return cfg.fijos.filter(f=>(!f.mes||f.mes===m+1)&&!list.some(x=>x.categoria===f.cat)&&!movs.some(x=>x.borrado&&x.id==='fx_'+f.cat+'_'+y+'-'+pad(m+1))).map(f=>{
@@ -1017,14 +1029,17 @@ function quedaMes(){
   const fijos=r2(futuros+pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0));
   const sinImporte=pend.filter(f=>!f.sugerido&&!f.porcentaje).map(f=>catById(f.cat).nombre);
   const pendA=r2(movs.filter(x=>pendAmazon(x)&&ids.has(cuentaDe(x))).reduce((a,x)=>a+x.importe,0));
-  const queda=r2(saldo-fijos-pendA);
+  const habL=habituales(y,m).filter(h=>ids.has(cuentaCat(h.cat)));
+  const habit=r2(habL.reduce((a,h)=>a+h.importe,0));
+  const esperaNomina=pend.some(f=>f.porcentaje&&!(f.sugerido>0));
+  const queda=r2(saldo-fijos-pendA-habit);
   const fin=pe.dias,dias=Math.max(1,diasEntre(hoy(),pe.fin)+1);
   const gastado=Math.max(0,t.gastos);
   const total=gastado+Math.max(queda,0);
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
   const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,partes,saldo,fijos,pendA,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
+  return {cuenta:bk,partes,saldo,fijos,pendA,habit,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
 function anilloQueda(q,col,px,centro){
@@ -1057,8 +1072,10 @@ function tarjetaSaldo(compacta){
    +q.partes.map(x=>linea('Saldo de '+esc(x.nombre)+' ahora',eur(x.saldo))).join('')
    +linea('Recibos fijos que faltan por cobrar','− '+eur(q.fijos))
    +(q.pendA>0?linea('Pedidos de Amazon pendientes de cobro','− '+eur(q.pendA)):'')
+   +(q.habit>0?linea('Gastos habituales que aún no han llegado (estimado)','− '+eur(q.habit)):'')
    +linea('<b>Para gastar hasta fin de mes</b>','<b>'+eur(q.queda)+'</b>')
    +(q.pendA>0?'<p class="small muted">Amazon aún no se ha cobrado en el banco, pero ya está descontado de lo que queda. Al importar el extracto desaparece esta línea.</p>':'')
+   +(q.esperaNomina?'<p class="small muted">El diezmo se sumará cuando entre la nómina.</p>':'')
    +(q.sinImporte.length?'<p class="small muted">Sin importe todavía: '+q.sinImporte.map(esc).join(', ')+'. Cuando llegue la factura, apúntala.</p>':'')
    +(q.delAhorro>0?'<p class="small" style="margin-top:8px;color:var(--warn)"><b>⚠️ Sacado del ahorro este mes: '+eur(q.delAhorro)+'</b>. Es dinero que en principio no se toca.'+(q.queda>=0?' Sin él, os '+(q.propio<0?'faltarían '+eur(-q.propio):'quedarían '+eur(q.propio))+'.':'')+'</p>':'')
    +(st!==null?'<p class="small muted" style="margin-top:8px">🏦 Ahorro en '+esc(tr.nombre)+': <b>'+eur(st)+'</b></p>':'')
@@ -1304,6 +1321,13 @@ function resumenMes(){
   if(pend.length){
     h+='<section class="card"><h2>Recibos fijos sin apuntar</h2><p class="muted small" style="margin-top:-6px">Confirma el importe y pulsa ✓. Si un mes no toca, ignóralo.</p>'
      +pend.map(f=>{const c=catById(f.cat);return '<div class="pend">'+icoCat(c,'sm')+'<span class="pn">'+esc(c.nombre)+(f.porcentaje?'<br><small class="muted">'+f.porcentaje+' % de los ingresos</small>':'')+'</span><input id="p_'+f.id+'" inputmode="decimal" value="'+(f.sugerido?String(f.sugerido).replace('.',','):'')+'" placeholder="Importe"><button class="btn sm" onclick="apuntarFijo(\''+f.id+'\')">✓</button></div>'}).join('')+'</section>';
+  }
+  if(vm.y===mh.y&&vm.m===mh.m){
+    const hb=habituales(vm.y,vm.m),esp=pend.filter(f=>f.porcentaje&&!(f.sugerido>0));
+    if(hb.length||esp.length)h+='<section class="card"><h2>Lo que falta por venir</h2><p class="muted small" style="margin-top:-6px">Estimado según los últimos meses. No está apuntado todavía.</p>'
+     +esp.map(f=>'<div class="bline"><div class="bhead"><span>'+icoCat(catById(f.cat),'xs')+esc(catById(f.cat).nombre)+'</span><span class="muted small">esperando la nómina</span></div></div>').join('')
+     +hb.map(x=>{const c=catById(x.cat);return '<div class="bline" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\''+c.id+'\')" aria-label="Ver los movimientos de '+esc(c.nombre)+'"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+' <small class="muted">›</small></span><b>~ '+eur0(x.importe)+'</b></div></div>'}).join('')
+     +(hb.length?'<p class="small muted" style="margin:8px 0 0">Total estimado: <b>'+eur0(hb.reduce((a,x)=>a+x.importe,0))+'</b>. Ya está descontado de «lo que os queda».</p>':'')+'</section>';
   }
   const gastosCat=cfg.cats.filter(c=>(c.grupo==='variable'||c.grupo==='fijo')&&(t.cat[c.id]||0)>0).map(c=>({c,v:t.cat[c.id]})).sort((a,b)=>b.v-a.v);
   if(gastosCat.length){
