@@ -912,9 +912,11 @@ function guardarEdicion(id){
 function borrar(id){updMov(id,{borrado:true});cerrar();render(true);toast('Movido a la papelera',()=>{updMov(id,{borrado:false});render(true)})}
 
 /* ===================== MOVIMIENTOS ===================== */
+/* Filtro por categoría. Valores especiales: @ing = todos los ingresos, @gas = todos los gastos, @neu = traspasos entre cuentas */
+function coincideCat(m,f){if(!f)return true;const g=catById(m.categoria).grupo;if(f==='@ing')return g==='ingreso';if(f==='@gas')return g==='variable'||g==='fijo';if(f==='@neu')return g==='neutro';return m.categoria===f}
 function listaHTML(){
   const q=norm(filtroTxt);
-  const list=deMes(vm.y,vm.m).filter(m=>(!filtroCat||m.categoria===filtroCat)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
+  const list=deMes(vm.y,vm.m).filter(m=>coincideCat(m,filtroCat)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
     .sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.creado-a.creado);
   if(!list.length)return '<p class="muted small">No hay movimientos.</p>';
   let out='',dia='';
@@ -925,7 +927,7 @@ function vMovs(){
   const t=calc(deMes(vm.y,vm.m));
   return (volver?'<button class="btn ghost sm" style="margin-bottom:10px" onclick="volverDeCat()">← Volver a '+({resumen:'Resumen',consejos:'Consejos'}[volver.vista]||'la pantalla anterior')+'</button>':'')+monthNav()
    +'<div class="kpis"><div class="kpi"><small>Ingresos</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi"><small>Gastos</small><b>'+eur(t.gastos)+'</b></div><div class="kpi"><small>Ahorro</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>'
-   +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option>'+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
+   +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option><option value="@ing"'+(filtroCat==='@ing'?' selected':'')+'>💰 Todos los ingresos</option><option value="@gas"'+(filtroCat==='@gas'?' selected':'')+'>🧾 Todos los gastos</option><option value="@neu"'+(filtroCat==='@neu'?' selected':'')+'>🔁 Traspasos entre cuentas</option>'+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
 }
 
 /* ===================== RESUMEN ===================== */
@@ -1275,7 +1277,7 @@ function resumenMes(){
   const t=calc(deMes(vm.y,vm.m));
   const pm=vm.m===0?{y:vm.y-1,m:11}:{y:vm.y,m:vm.m-1};
   const tp=calc(deMes(pm.y,pm.m));
-  let h='<div class="kpis"><div class="kpi"><small>Ingresos</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi"><small>Gastos</small><b>'+eur(t.gastos)+'</b></div><div class="kpi"><small>Ahorro</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>';
+  let h='<div class="kpis"><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\'@ing\')" aria-label="Ver los ingresos del mes"><small>Ingresos ›</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\'@gas\')" aria-label="Ver los gastos del mes"><small>Gastos ›</small><b>'+eur(t.gastos)+'</b></div><div class="kpi"><small>Ahorro</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>';
   const mh=mesContHoy();if(vm.y===mh.y&&vm.m===mh.m)h+=tarjetaSaldo(false);
   const pend=pendientesFijos(vm.y,vm.m,t);
   if(pend.length){
@@ -1288,7 +1290,7 @@ function resumenMes(){
     const resto=gastosCat.slice(8).reduce((a,x)=>a+x.v,0);
     if(resto>0)top.push({lab:'Resto',v:resto,col:PALETA[9]});
     const tot=top.reduce((a,x)=>a+x.v,0);
-    h+='<section class="card"><h2>¿En qué se ha ido el dinero?</h2><div class="donutbox">'+donut(top,tot)+'<div class="legend">'+top.map(x=>x.id?'<button type="button" class="lgb" onclick="verCat(\''+x.id+'\')" aria-label="Ver los movimientos de '+esc(x.lab)+'"><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b><em aria-hidden="true">›</em></button>':'<div><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b></div>').join('')+'</div></div><p class="muted small" style="margin:8px 0 0">Toca una categoría para ver sus movimientos.</p></section>';
+    h+='<section class="card"><h2>¿En qué se ha ido el dinero?</h2><div class="donutbox">'+donut(top,tot)+'<div class="legend">'+top.map(x=>x.id?'<button type="button" class="lgb" onclick="verCat(\''+x.id+'\')" aria-label="Ver los movimientos de '+esc(x.lab)+'"><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b><em aria-hidden="true">›</em></button>':'<div><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b></div>').join('')+'</div></div><p class="muted small" style="margin:8px 0 0">Toca una categoría para ver sus movimientos. Todas las demás están abajo, en «Gastos del día a día» y «Recibos fijos».</p></section>';
   }
   const vars=cfg.cats.filter(c=>c.grupo==='variable'&&(!c.oculta||(t.cat[c.id]||0)!==0));
   const maxV=Math.max(1,...vars.map(c=>t.cat[c.id]||0));
@@ -1298,14 +1300,14 @@ function resumenMes(){
      const pct=p?Math.min(100,v/p*100):v/maxV*100;
      const col=p?(v>p?'var(--neg)':v>p*.8?'var(--warn)':'var(--pos)'):'var(--brand)';
      const dif=v-prev;const comp=prev||v?(dif>0.5?'▲ '+eur0(dif):dif<-0.5?'▼ '+eur0(-dif):'='):'';
-     return '<div class="bline"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+'</span><span><b>'+eur(v)+'</b>'+(p?' <small class="muted">de '+eur0(p)+'</small>':'')+'</span></div><div class="bar"><i style="width:'+pct+'%;background:'+col+'"></i></div>'+(comp?'<small class="muted">vs mes anterior: '+comp+'</small>':'')+'</div>';
+     return '<div class="bline" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\''+c.id+'\')" aria-label="Ver los movimientos de '+esc(c.nombre)+'"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+'</span><span><b>'+eur(v)+'</b>'+(p?' <small class="muted">de '+eur0(p)+'</small>':'')+' <small class="muted">›</small></span></div><div class="bar"><i style="width:'+pct+'%;background:'+col+'"></i></div>'+(comp?'<small class="muted">vs mes anterior: '+comp+'</small>':'')+'</div>';
    }).join('')+'</section>';
   if(sync.url&&sync.clave&&(t.cat.super||0)>0)h+='<section class="card" id="mercaBox"><h2>🛒 Dentro de Mercadona</h2><p class="muted small">Cargando productos…</p></section>';
   const fijos=cfg.cats.filter(c=>c.grupo==='fijo'&&t.cat[c.id]);
-  h+='<section class="card"><h2>Recibos fijos</h2><p class="muted small" style="margin-top:-6px">Total '+eur(t.fijo)+'</p>'+(fijos.length?fijos.map(c=>'<div class="bline"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+'</span><span>'+eur(t.cat[c.id])+'</span></div></div>').join(''):'<p class="muted small">Ninguno apuntado este mes.</p>')+'</section>';
+  h+='<section class="card"><h2>Recibos fijos</h2><p class="muted small" style="margin-top:-6px">Total '+eur(t.fijo)+'</p>'+(fijos.length?fijos.map(c=>'<div class="bline" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\''+c.id+'\')" aria-label="Ver los movimientos de '+esc(c.nombre)+'"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+'</span><span>'+eur(t.cat[c.id])+' <small class="muted">›</small></span></div></div>').join(''):'<p class="muted small">Ninguno apuntado este mes.</p>')+'</section>';
   const ings=cfg.cats.filter(c=>c.grupo==='ingreso'&&t.cat[c.id]);
-  if(ings.length)h+='<section class="card"><h2>Ingresos</h2>'+ings.map(c=>'<div class="bline"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+'</span><span class="pos">'+eur(t.cat[c.id])+'</span></div></div>').join('')+'</section>';
-  if(Math.abs(t.neutro)>0.005)h+='<p class="muted small">🔁 Movimientos entre cuentas / inversión este mes (no cuentan): '+eur(Math.abs(t.neutro))+'</p>';
+  if(ings.length)h+='<section class="card"><h2>Ingresos</h2>'+ings.map(c=>'<div class="bline" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\''+c.id+'\')" aria-label="Ver los movimientos de '+esc(c.nombre)+'"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+'</span><span class="pos">'+eur(t.cat[c.id])+' <small class="muted">›</small></span></div></div>').join('')+'</section>';
+  if(Math.abs(t.neutro)>0.005)h+='<p class="muted small" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\'@neu\')">🔁 Movimientos entre cuentas / inversión este mes (no cuentan): '+eur(Math.abs(t.neutro))+' ›</p>';
   return h;
 }
 /* Apunta solos los recibos fijos del mes en curso (mismo identificador en los dos móviles, así no se duplican) */
