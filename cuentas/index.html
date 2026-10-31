@@ -312,7 +312,7 @@ let yo=store.get('cc_yo',null)||cfg.personas[0];
 let vista='apuntar';
 const ahoraD=new Date();
 let vm=mesContHoy();
-let modoRes='mes';
+let modoRes='mes';let movAno=false;
 let form={tipo:'gasto',cat:null,sub:'',imp:'',nota:'',fecha:'',quien:''};
 let filtroTxt='',filtroCat='';
 let imp={banco:'Bankinter',raw:null,map:null,filas:[],nombre:''};
@@ -396,10 +396,11 @@ function finBienvenida(a){
   else{vista='apuntar';render();toast('¡Listo! Ya puedes apuntar tu primer gasto')}
 }
 let volver=null; // pantalla de la que venimos al abrir una categoría (para poder volver)
-function ir(v){if(vista==='apuntar'&&$('#fImp'))leerForm();if(v!=='movs')volver=null;vista=v;render();window.scrollTo(0,0)}
+function ir(v){if(vista==='apuntar'&&$('#fImp'))leerForm();if(v!=='movs'){volver=null;movAno=false}vista=v;render();window.scrollTo(0,0)}
 function verSinClas(){if(vista!=='movs')volver={vista,y:vm.y,m:vm.m,modo:modoRes};const l=movs.filter(m=>!m.borrado&&m.categoria==='sin_clasificar').map(m=>mesCont(m)).sort();const u=(l[l.length-1]||'').split('-');if(u.length===2)vm={y:+u[0],m:+u[1]-1};verCat('sin_clasificar')}
-function verCat(id){if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};filtroCat=id;filtroTxt='';ir('movs')}
-function volverDeCat(){const v=volver;volver=null;filtroCat='';filtroTxt='';if(!v){ir('resumen');return}vm={y:v.y,m:v.m};modoRes=v.modo;ir(v.vista)}
+function verCatAno(id){if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};movAno=true;filtroCat=id;filtroTxt='';ir('movs')}
+function verCat(id){movAno=false;if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};filtroCat=id;filtroTxt='';ir('movs')}
+function volverDeCat(){const v=volver;volver=null;movAno=false;filtroCat='';filtroTxt='';if(!v){ir('resumen');return}vm={y:v.y,m:v.m};modoRes=v.modo;ir(v.vista)}
 function render(sinGuardarForm){
   if(bienv){$('#app').innerHTML=vBienvenida();document.querySelector('.nav').style.display='none';return}
   document.querySelector('.nav').style.display='';
@@ -441,14 +442,14 @@ function toast(msg,deshacer){
 function abrir(){$('#modal').classList.remove('hidden')}
 function cerrar(){$('#modal').classList.add('hidden')}
 function monthNav(){
-  const ano=modoRes==='ano'&&vista==='resumen';
+  const ano=(modoRes==='ano'&&vista==='resumen')||(vista==='movs'&&movAno);
   const etiqueta=ano?String(vm.y):MESES[vm.m]+' '+vm.y;
   const pe=!ano&&diaCierre()?periodo(vm.y,vm.m):null;
   const sub=pe?'<small style="display:block;font-weight:500;font-size:11px;color:var(--muted)">'+fechaCorta(pe.ini)+' – '+fechaCorta(pe.fin)+'</small>':'';
   return '<div class="mnav"><button onclick="mover(-1)" aria-label="Anterior">‹</button><b>'+etiqueta+sub+'</b><button onclick="mover(1)" aria-label="Siguiente">›</button></div>';
 }
 function mover(d){
-  if(modoRes==='ano'&&vista==='resumen'){vm.y+=d}
+  if((modoRes==='ano'&&vista==='resumen')||(vista==='movs'&&movAno)){vm.y+=d}
   else{vm.m+=d;if(vm.m<0){vm.m=11;vm.y--}if(vm.m>11){vm.m=0;vm.y++}}
   render();
 }
@@ -916,7 +917,7 @@ function borrar(id){updMov(id,{borrado:true});cerrar();render(true);toast('Movid
 function coincideCat(m,f){if(!f)return true;const g=catById(m.categoria).grupo;if(f==='@ing')return g==='ingreso';if(f==='@gas')return g==='variable'||g==='fijo';if(f==='@neu')return g==='neutro';return m.categoria===f}
 function listaHTML(){
   const q=norm(filtroTxt);
-  const list=deMes(vm.y,vm.m).filter(m=>coincideCat(m,filtroCat)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
+  const list=(movAno?deAno(vm.y):deMes(vm.y,vm.m)).filter(m=>coincideCat(m,filtroCat)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
     .sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.creado-a.creado);
   if(!list.length)return '<p class="muted small">No hay movimientos.</p>';
   let out='',dia='';
@@ -941,7 +942,7 @@ function verAhorro(){
   abrir();
 }
 function vMovs(){
-  const t=calc(deMes(vm.y,vm.m));
+  const t=calc(movAno?deAno(vm.y):deMes(vm.y,vm.m));
   return (volver?'<button class="btn ghost sm" style="margin-bottom:10px" onclick="volverDeCat()">← Volver a '+({resumen:'Resumen',consejos:'Consejos'}[volver.vista]||'la pantalla anterior')+'</button>':'')+monthNav()
    +'<div class="kpis"><div class="kpi" role="button" tabindex="0" style="cursor:pointer;'+(filtroCat==='@ing'?'outline:2px solid var(--brand)':'')+'" onclick="filtroCat=filtroCat===\'@ing\'?\'\':\'@ing\';filtroTxt=\'\';render()" aria-label="Ver solo los ingresos"><small>Ingresos ›</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer;'+(filtroCat==='@gas'?'outline:2px solid var(--brand)':'')+'" onclick="filtroCat=filtroCat===\'@gas\'?\'\':\'@gas\';filtroTxt=\'\';render()" aria-label="Ver solo los gastos"><small>Gastos ›</small><b>'+eur(t.gastos)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verAhorro()" aria-label="Ver cómo sale el ahorro"><small>Ahorro ›</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>'
    +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option><option value="@ing"'+(filtroCat==='@ing'?' selected':'')+'>💰 Todos los ingresos</option><option value="@gas"'+(filtroCat==='@gas'?' selected':'')+'>🧾 Todos los gastos</option><option value="@neu"'+(filtroCat==='@neu'?' selected':'')+'>🔁 Traspasos entre cuentas</option>'+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
@@ -1222,7 +1223,7 @@ function vConsejos(){
   }
   // Dónde se va más dinero
   if(a.top.length){
-    const fila=x=>'<div class="cn-row"><span class="cn-n">'+esc(x.c.nombre)+'</span><b>'+eur0(x.v)+'</b>'+(x.pct!==null?'<span class="cn-chip '+(x.pct>=10?'up':x.pct<=-10?'down':'')+'">'+(x.pct>0?'+':x.pct<0?'−':'')+Math.abs(x.pct)+' %</span>':'')+'</div>';
+    const fila=x=>'<div class="cn-row" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\''+x.c.id+'\')"><span class="cn-n">'+esc(x.c.nombre)+' <small class="muted">›</small></span><b>'+eur0(x.v)+'</b>'+(x.pct!==null?'<span class="cn-chip '+(x.pct>=10?'up':x.pct<=-10?'down':'')+'">'+(x.pct>0?'+':x.pct<0?'−':'')+Math.abs(x.pct)+' %</span>':'')+'</div>';
     let cu=a.top.map(fila).join('');
     cu+='<p class="small muted" style="margin:8px 0 0">'+(a.hayHist?'El porcentaje compara con vuestra media mensual de los últimos '+a.prevC.length+' meses'+(a.actual?' (lo variable, calculado para el mes completo)':'')+'.':'Cuando haya un par de meses más de datos, os diré cómo se compara con lo habitual.')+'</p>';
     if(a.sube){const ahorro=Math.round(a.sube.cv-a.sube.md);cu+=cnTip('<b>'+esc(a.sube.c.nombre)+'</b> es lo que más ha subido sobre vuestra media. Si volvierais a ella, ahorraríais unos <b>'+eur0(ahorro)+'</b> este mes.')}
@@ -1234,7 +1235,7 @@ function vConsejos(){
     let cu='';
     if(sobre.length){
       cu=sobre.slice(0,4).map(x=>{const pasado=x.r>1,col=pasado?'var(--neg)':'var(--warn)';
-        return '<div style="margin-top:12px"><div class="cn-lin"><span>'+esc(x.c.nombre)+'</span><span><b>'+eur0(x.v)+'</b> de '+eur0(x.p)+'</span></div>'+cnBarra(x.r*100,col)+'<div class="small" style="margin-top:5px;color:'+(pasado?'var(--neg)':'var(--muted)')+'">'+(pasado?'Os habéis pasado '+eur0(x.v-x.p)+(a.actual&&a.dia<a.dias?' con '+(a.dias-a.dia)+' día'+(a.dias-a.dia>1?'s':'')+' por delante.':'.'):'Os quedan '+eur0(x.p-x.v)+' de límite.')+'</div></div>'}).join('');
+        return '<div style="margin-top:12px;cursor:pointer" role="button" tabindex="0" onclick="verCat(\''+x.c.id+'\')"><div class="cn-lin"><span>'+esc(x.c.nombre)+' <small class="muted">›</small></span><span><b>'+eur0(x.v)+'</b> de '+eur0(x.p)+'</span></div>'+cnBarra(x.r*100,col)+'<div class="small" style="margin-top:5px;color:'+(pasado?'var(--neg)':'var(--muted)')+'">'+(pasado?'Os habéis pasado '+eur0(x.v-x.p)+(a.actual&&a.dia<a.dias?' con '+(a.dias-a.dia)+' día'+(a.dias-a.dia>1?'s':'')+' por delante.':'.'):'Os quedan '+eur0(x.p-x.v)+' de límite.')+'</div></div>'}).join('');
     }else cu='<p style="margin:10px 0 0">Todas las categorías con límite van por debajo del 80 %. Buen ritmo.</p>';
     const hay=a.lim.some(x=>x.r>1);
     h+=cnCard('#E0533D',SVG_ALERTA,'Límites del mes',cnTag(hay?'bad':sobre.length?'warn':'ok',hay?'Atención':sobre.length?'Vigilar':'Bien'),cu);
@@ -1244,7 +1245,7 @@ function vConsejos(){
   // Gastos fuera de lo normal
   if(a.hayHist){
     if(a.raros.length){
-      const cu=a.raros.map(r=>'<p>El día <b>'+Number(String(r.m.fecha).slice(8,10))+'</b> apuntasteis <b>'+eur(r.m.importe)+'</b> en <b>'+esc(r.c.nombre)+'</b>'+(r.m.nota?' ('+esc(r.m.nota)+')':'')+'. Lo habitual en un apunte de esa categoría son unos <b>'+eur0(r.md)+'</b>.</p>').join('')+'<p class="small muted" style="margin:8px 0 0">Si fue una compra puntual, no pasa nada. Si se repite, conviene ponerle un límite.</p>';
+      const cu=a.raros.map(r=>'<p>El día <b>'+Number(String(r.m.fecha).slice(8,10))+'</b> apuntasteis <b>'+eur(r.m.importe)+'</b> en <b>'+esc(r.c.nombre)+'</b> <a href="#" onclick="verCat(\''+r.c.id+'\');return false">›</a>'+(r.m.nota?' ('+esc(r.m.nota)+')':'')+'. Lo habitual en un apunte de esa categoría son unos <b>'+eur0(r.md)+'</b>.</p>').join('')+'<p class="small muted" style="margin:8px 0 0">Si fue una compra puntual, no pasa nada. Si se repite, conviene ponerle un límite.</p>';
       h+=cnCard('#D9539A',ICONOS.impuestos[1],'Un gasto fuera de lo normal',cnTag('warn','Revisar'),cu);
     }else{
       h+=cnCard('#D9539A',ICONOS.impuestos[1],'Gastos fuera de lo normal',cnTag('ok','Nada raro'),'<p style="margin:10px 0 0">'+(a.actual?'Este mes':'Ese mes')+' no hay ningún apunte que se salga de lo habitual en su categoría.</p>');
@@ -1253,7 +1254,7 @@ function vConsejos(){
   // Gastos que se repiten cada mes
   if(a.fijosCat.length){
     const cu='<div class="cn-big2">'+eur0(a.fijosMes)+' <span class="small muted" style="font-weight:600">al mes</span></div><p class="small muted" style="margin:2px 0 0">'+a.fijosCat.length+' gasto'+(a.fijosCat.length>1?'s fijos':' fijo')+'. Son <b style="color:var(--ink)">'+eur0(a.fijosMes*12)+'</b> al año.</p><div style="margin-top:6px">'
-      +a.fijosCat.slice(0,5).map(x=>'<div class="cn-row"><span class="cn-n">'+esc(x.c.nombre)+'</span><b>'+eur(x.v)+'</b></div>').join('')+'</div>'
+      +a.fijosCat.slice(0,5).map(x=>'<div class="cn-row" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\''+x.c.id+'\')"><span class="cn-n">'+esc(x.c.nombre)+' <small class="muted">›</small></span><b>'+eur(x.v)+'</b></div>').join('')+'</div>'
       +cnTip('Si no usáis alguno de estos servicios, darlo de baja es la forma más fácil de ahorrar: se repite todos los meses.');
     h+=cnCard('#6C63D9',SVG_CAL,'Lo que pagáis cada mes',cnTag('info','Recibos'),cu);
   }
@@ -1383,7 +1384,7 @@ function resumenAno(){
   h+='<section class="card"><h2>Mes a mes</h2>'+barras([{vals:meses.map(x=>x.ingreso),col:'var(--pos)'},{vals:meses.map(x=>x.gastos),col:'var(--brand)'}])+'<div class="flex small muted"><span><i class="dot" style="background:var(--pos);display:inline-block"></i> Ingresos</span><span><i class="dot" style="background:var(--brand);display:inline-block"></i> Gastos</span></div>'
    +'<div class="tbl"><table><tr><th>Mes</th><th>Ingresos</th><th>Gastos</th><th>Ahorro</th><th>Acumulado</th></tr>'
    +meses.map((x,i)=>{acc+=x.ahorro;return '<tr><td>'+MESES[i]+'</td><td>'+eur0(x.ingreso)+'</td><td>'+eur0(x.gastos)+'</td><td class="'+(x.ahorro>=0?'pos':'neg')+'">'+eur0(x.ahorro)+'</td><td>'+eur0(acc)+'</td></tr>'}).join('')+'</table></div></section>';
-  const fila=c=>'<tr><td>'+c.icono+' '+esc(c.nombre)+'</td><td>'+eur0(t.cat[c.id]||0)+'</td><td>'+eur0((t.cat[c.id]||0)/conDatos)+'</td></tr>';
+  const fila=c=>'<tr role="button" tabindex="0" style="cursor:pointer" onclick="verCatAno(\''+c.id+'\')"><td>'+c.icono+' '+esc(c.nombre)+' <small class="muted">›</small></td><td>'+eur0(t.cat[c.id]||0)+'</td><td>'+eur0((t.cat[c.id]||0)/conDatos)+'</td></tr>';
   const conGasto=g=>cfg.cats.filter(c=>c.grupo===g&&t.cat[c.id]).sort((a,b)=>t.cat[b.id]-t.cat[a.id]);
   h+='<section class="card"><h2>Por categoría</h2><p class="muted small" style="margin-top:-6px">Media calculada sobre '+conDatos+' mes(es) con datos.</p><div class="tbl"><table><tr><th>Categoría</th><th>Total año</th><th>Media/mes</th></tr>'
    +'<tr><th colspan="3">Día a día</th></tr>'+conGasto('variable').map(fila).join('')
