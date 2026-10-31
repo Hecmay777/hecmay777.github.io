@@ -513,7 +513,10 @@ function itemMov(m){
 }
 function catOptions(sel,conVacio){
   const grupos=[['variable','Gastos del día a día'],['fijo','Recibos y gastos fijos'],['ingreso','Ingresos'],['neutro','No cuentan (traspasos)']];
-  return (conVacio?'<option value="">— Elige categoría —</option>':'')+grupos.map(([g,t])=>'<optgroup label="'+t+'">'+cfg.cats.filter(c=>c.grupo===g&&(!c.oculta||c.id===sel)).map(c=>'<option value="'+c.id+'"'+(c.id===sel?' selected':'')+'>'+c.icono+' '+esc(c.nombre)+'</option>').join('')+'</optgroup>').join('');
+  const op=c=>'<option value="'+c.id+'"'+(c.id===sel?' selected':'')+'>'+c.icono+' '+esc(c.nombre)+'</option>';
+  const ord=(a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es',{sensitivity:'base'});
+  const sc=cfg.cats.find(c=>c.id==='sin_clasificar');
+  return (conVacio?'<option value="">— Elige categoría —</option>':'')+grupos.map(([g,t])=>'<optgroup label="'+t+'">'+cfg.cats.filter(c=>c.grupo===g&&c.id!=='sin_clasificar'&&(!c.oculta||c.id===sel)).sort(ord).map(op).join('')+'</optgroup>').join('')+(sc?'<optgroup label="Pendiente de clasificar">'+op(sc)+'</optgroup>':'');
 }
 const personasOpts=sel=>(sel!==undefined&&!cfg.personas.includes(sel)?'<option value="'+esc(sel||'')+'" selected>'+(sel?esc(sel):'—')+'</option>':'')+cfg.personas.map(p=>'<option'+(p===sel?' selected':'')+'>'+esc(p)+'</option>').join('');
 
