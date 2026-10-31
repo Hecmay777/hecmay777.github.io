@@ -1016,6 +1016,8 @@ function saldoCuenta(c){
   });
   return r2(s);
 }
+/* Presupuesto de súper: se reserva entero desde el día 1 del mes contable; lo que se gasta en súper lo va gastando */
+function presSuper(){const c=cfg.cats.find(x=>x.id==='super');return c&&!c.oculta?Math.max(0,Number(c.presupuesto)||0):0}
 function quedaMes(){
   const d=new Date(),mc=mesContHoy(),y=mc.y,m=mc.m,pe=periodo(y,m);
   const bk=cuentaDia();
@@ -1037,14 +1039,16 @@ function quedaMes(){
   const habL=habituales(y,m).filter(h=>ids.has(cuentaCat(h.cat)));
   const habit=r2(habL.reduce((a,h)=>a+h.importe,0));
   const esperaNomina=pend.some(f=>f.porcentaje&&!(f.sugerido>0));
-  const queda=r2(saldo-fijos-pendA-habit);
+  const superPres=presSuper(),superGast=r2(deMes(y,m).filter(x=>x.categoria==='super'&&x.tipo==='gasto').reduce((a,x)=>a+x.importe,0)-deMes(y,m).filter(x=>x.categoria==='super'&&x.tipo==='ingreso').reduce((a,x)=>a+x.importe,0));
+  const superFalta=superPres>0?r2(Math.max(0,superPres-superGast)):0;
+  const queda=r2(saldo-fijos-pendA-habit-superFalta);
   const fin=pe.dias,dias=Math.max(1,diasEntre(hoy(),pe.fin)+1);
   const gastado=Math.max(0,t.gastos);
   const total=gastado+Math.max(queda,0);
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
   const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,partes,saldo,fijos,pendA,habit,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
+  return {cuenta:bk,partes,saldo,fijos,pendA,habit,superPres,superGast,superFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
 function anilloQueda(q,col,px,centro){
@@ -1078,7 +1082,9 @@ function tarjetaSaldo(compacta){
    +linea('Recibos fijos que faltan por cobrar','− '+eur(q.fijos))
    +(q.pendA>0?linea('Pedidos de Amazon pendientes de cobro','− '+eur(q.pendA)):'')
    +(q.habit>0?linea('Gastos habituales que aún no han llegado (estimado)','− '+eur(q.habit)):'')
+   +(q.superPres>0?linea('Súper que falta por gastar (de '+eur0(q.superPres)+')','− '+eur(q.superFalta)):'')
    +linea('<b>Para gastar hasta fin de mes</b>','<b>'+eur(q.queda)+'</b>')
+   +(q.superPres>0?'<div role="button" tabindex="0" style="cursor:pointer;margin-top:8px" onclick="verCat(\'super\')" aria-label="Ver los movimientos del súper"><div class="small">🛒 Súper: lleváis <b>'+eur(Math.max(0,q.superGast))+'</b> de '+eur0(q.superPres)+(q.superGast>q.superPres?' <b style="color:var(--neg)">(pasados '+eur(q.superGast-q.superPres)+')</b>':'')+' <small class="muted">›</small></div><div class="bar" style="height:8px;margin-top:4px"><i style="width:'+Math.min(100,Math.max(0,q.superGast)/q.superPres*100)+'%;background:'+(q.superGast>q.superPres?'var(--neg)':'var(--brand)')+'"></i></div><p class="small muted" style="margin:4px 0 0">Los '+eur0(q.superPres)+' del súper (se cambian en Ajustes, en Categorías) están reservados desde el principio del mes: no cuentan como dinero libre ni como ahorro.</p></div>':'')
    +(q.pendA>0?'<p class="small muted">Amazon aún no se ha cobrado en el banco, pero ya está descontado de lo que queda. Al importar el extracto desaparece esta línea.</p>':'')
    +(q.esperaNomina?'<p class="small muted">El diezmo se sumará cuando entre la nómina.</p>':'')
    +(q.sinImporte.length?'<p class="small muted">Sin importe todavía: '+q.sinImporte.map(esc).join(', ')+'. Cuando llegue la factura, apúntala.</p>':'')
