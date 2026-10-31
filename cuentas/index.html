@@ -923,10 +923,27 @@ function listaHTML(){
   list.forEach(m=>{if(m.fecha!==dia){dia=m.fecha;out+='<div class="day">'+fechaCorta(dia)+'</div>'}out+=itemMov(m)});
   return out;
 }
+function verAhorro(){
+  const t=calc(deMes(vm.y,vm.m));
+  const pv=mesesAntes(vm.y,vm.m,6).filter(p=>p.t.ingreso>0);
+  const pct=t.ingreso>0?Math.round(t.ahorro/t.ingreso*100):null;
+  const med=pv.length?Math.round(mediaDe(pv.map(p=>p.t.ahorro/p.t.ingreso))*100):null;
+  const pe=diaCierre()?periodo(vm.y,vm.m):null;
+  const fila=(a,b,cl,f)=>'<div class="bhead" role="button" tabindex="0" style="padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="cerrar();verCat(\''+f+'\')"><span>'+a+' <small class="muted">›</small></span><b class="'+cl+'">'+b+'</b></div>';
+  $('#sheet').innerHTML='<h2>💰 Cómo sale el ahorro</h2><p class="muted small" style="margin-top:-4px">'+MESES[vm.m]+' '+vm.y+(pe?' · '+fechaCorta(pe.ini)+' – '+fechaCorta(pe.fin):'')+'</p>'
+   +fila('Ingresos','+ '+eur(t.ingreso),'pos','@ing')
+   +fila('Gastos','− '+eur(t.gastos),'','@gas')
+   +'<div class="bhead" style="padding:12px 0"><span><b>Ahorro</b></span><b class="'+(t.ahorro>=0?'pos':'neg')+'" style="font-size:20px">'+eur(t.ahorro)+'</b></div>'
+   +(pct!==null?'<p class="small" style="margin:0 0 8px">Es el <b>'+pct+' %</b> de los ingresos'+(med!==null?'. De media, en los meses anteriores, fue el <b>'+med+' %</b>.':'.')+'</p>':'')
+   +(Math.abs(t.neutro)>0.005?'<p class="muted small" style="margin:0 0 8px">🔁 Los traspasos entre cuentas y las inversiones ('+eur(Math.abs(t.neutro))+') no entran en esta cuenta.</p>':'')
+   +'<p class="muted small" style="margin:0 0 8px">Toca Ingresos o Gastos para ver sus movimientos.</p>'
+   +'<button class="btn" onclick="cerrar()">Cerrar</button>';
+  abrir();
+}
 function vMovs(){
   const t=calc(deMes(vm.y,vm.m));
   return (volver?'<button class="btn ghost sm" style="margin-bottom:10px" onclick="volverDeCat()">← Volver a '+({resumen:'Resumen',consejos:'Consejos'}[volver.vista]||'la pantalla anterior')+'</button>':'')+monthNav()
-   +'<div class="kpis"><div class="kpi"><small>Ingresos</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi"><small>Gastos</small><b>'+eur(t.gastos)+'</b></div><div class="kpi"><small>Ahorro</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>'
+   +'<div class="kpis"><div class="kpi" role="button" tabindex="0" style="cursor:pointer;'+(filtroCat==='@ing'?'outline:2px solid var(--brand)':'')+'" onclick="filtroCat=filtroCat===\'@ing\'?\'\':\'@ing\';filtroTxt=\'\';render()" aria-label="Ver solo los ingresos"><small>Ingresos ›</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer;'+(filtroCat==='@gas'?'outline:2px solid var(--brand)':'')+'" onclick="filtroCat=filtroCat===\'@gas\'?\'\':\'@gas\';filtroTxt=\'\';render()" aria-label="Ver solo los gastos"><small>Gastos ›</small><b>'+eur(t.gastos)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verAhorro()" aria-label="Ver cómo sale el ahorro"><small>Ahorro ›</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>'
    +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option><option value="@ing"'+(filtroCat==='@ing'?' selected':'')+'>💰 Todos los ingresos</option><option value="@gas"'+(filtroCat==='@gas'?' selected':'')+'>🧾 Todos los gastos</option><option value="@neu"'+(filtroCat==='@neu'?' selected':'')+'>🔁 Traspasos entre cuentas</option>'+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
 }
 
@@ -1277,7 +1294,7 @@ function resumenMes(){
   const t=calc(deMes(vm.y,vm.m));
   const pm=vm.m===0?{y:vm.y-1,m:11}:{y:vm.y,m:vm.m-1};
   const tp=calc(deMes(pm.y,pm.m));
-  let h='<div class="kpis"><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\'@ing\')" aria-label="Ver los ingresos del mes"><small>Ingresos ›</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\'@gas\')" aria-label="Ver los gastos del mes"><small>Gastos ›</small><b>'+eur(t.gastos)+'</b></div><div class="kpi"><small>Ahorro</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>';
+  let h='<div class="kpis"><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\'@ing\')" aria-label="Ver los ingresos del mes"><small>Ingresos ›</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\'@gas\')" aria-label="Ver los gastos del mes"><small>Gastos ›</small><b>'+eur(t.gastos)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verAhorro()" aria-label="Ver cómo sale el ahorro"><small>Ahorro ›</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b></div></div>';
   const mh=mesContHoy();if(vm.y===mh.y&&vm.m===mh.m)h+=tarjetaSaldo(false);
   const pend=pendientesFijos(vm.y,vm.m,t);
   if(pend.length){
