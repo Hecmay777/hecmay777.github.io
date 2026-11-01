@@ -948,12 +948,13 @@ function verAhorro(){
    +fila('Ingresos','+ '+eur(t.ingreso),'pos','@ing')
    +fila(pv0?'Gastos ya pagados':'Gastos','− '+eur(pv0?pv0.pagados:t.gastos),'','@gas')
    +(rs>0?fila('Súper que falta por gastar','− '+eur(rs),'','super'):'')
+   +(pv0&&pv0.rg>0?fila('Gasolina que falta por gastar','− '+eur(pv0.rg),'','gasolina'):'')
    +(pv0?'<div class="bhead" style="padding:10px 0;border-bottom:1px solid var(--line)"><span><b>Ahorro de ahora</b></span><b>'+eur(pv0.ahora)+'</b></div>'+(pv0.fij>0?'<div class="bhead" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Recibos fijos que faltan por cobrar</span><b>− '+eur(pv0.fij)+'</b></div>':'')+(pv0.hab>0?'<div class="bhead" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Gastos habituales que aún no han llegado (estimado)</span><b>− '+eur(pv0.hab)+'</b></div>':''):'')
    +'<div class="bhead" style="padding:12px 0"><span><b>'+(pv0?'Ahorro previsto a fin de mes':'Ahorro')+'</b></span><b class="'+(t.ahorro>=0?'pos':'neg')+'" style="font-size:20px">'+eur(t.ahorro)+'</b></div>'
    +(pct!==null?'<p class="small" style="margin:0 0 8px">Es el <b>'+pct+' %</b> de los ingresos'+(med!==null?'. De media, en los meses anteriores, fue el <b>'+med+' %</b>.':'.')+'</p>':'')
    +(Math.abs(t.neutro)>0.005?'<p class="muted small" style="margin:0 0 8px">🔁 Los traspasos entre cuentas y las inversiones ('+eur(Math.abs(t.neutro))+') no entran en esta cuenta.</p>':'')
    +(pv0&&pv0.sobrante!==null&&Math.abs(pv0.sobrante)>=1?'<p class="small" style="margin:0 0 8px">💡 Sobrante de antes del día '+diaCierre()+': <b>'+eur(pv0.sobrante)+'</b>. Ya estaba en las cuentas al empezar el periodo, por eso «Lo que os queda» sale '+(pv0.sobrante>0?'más alto':'más bajo')+' que este ahorro.</p>':'')
-   +'<p class="muted small" style="margin:0 0 8px">'+(pv0?(pv0.diezmo?'Falta calcular el diezmo: se restará cuando entre la nómina, así que el ahorro previsto bajará algo. ':'')+'El previsto ya descuenta lo que falta del súper, los recibos que quedan y los gastos habituales estimados. ':'')+'Toca Ingresos o Gastos para ver sus movimientos.</p>'
+   +'<p class="muted small" style="margin:0 0 8px">'+(pv0?(pv0.diezmo?'Falta calcular el diezmo: se restará cuando entre la nómina, así que el ahorro previsto bajará algo. ':'')+'El previsto ya descuenta lo que falta del súper y de la gasolina, los recibos que quedan y los gastos habituales estimados. ':'')+'Toca Ingresos o Gastos para ver sus movimientos.</p>'
    +'<button class="btn" onclick="cerrar()">Cerrar</button>';
   abrir();
 }
@@ -971,7 +972,7 @@ function habituales(y,m){
   const hist=per.map(([a,b])=>{const t={},n={};deMes(a,b).forEach(x=>{const g=catById(x.categoria).grupo;if(g!=='variable'&&g!=='fijo')return;t[x.categoria]=(t[x.categoria]||0)+(x.tipo==='gasto'?x.importe:-x.importe);n[x.categoria]=(n[x.categoria]||0)+1});return {t,n}}).filter(o=>Object.keys(o.t).length);
   if(hist.length<2)return [];
   const ya=new Set(deMes(y,m).map(x=>x.categoria)),fij=new Set(cfg.fijos.map(f=>f.cat));
-  return Object.keys(hist[0].t).filter(c=>c!=='extras'&&c!=='sin_clasificar'&&!ya.has(c)&&!fij.has(c)&&hist.every(o=>o.t[c]>0&&o.n[c]<=2)).map(c=>{
+  return Object.keys(hist[0].t).filter(c=>c!=='extras'&&c!=='sin_clasificar'&&c!=='gasolina'&&c!=='super'&&!ya.has(c)&&!fij.has(c)&&hist.every(o=>o.t[c]>0&&o.n[c]<=2)).map(c=>{
     const v=hist.map(o=>o.t[c]).sort((a,b)=>a-b);
     if(v[v.length-1]/v[0]>1.6)return null;
     return {cat:c,importe:r2(v[Math.floor(v.length/2)])};
@@ -1035,24 +1036,27 @@ function sinCobrarCuenta(c){
 /* Lo que marca el banco ahora (sin restar los recibos que aún no ha cobrado) */
 function saldoBanco(c){const s=saldoCuenta(c);return s===null?null:r2(s+sinCobrarCuenta(c))}
 /* Presupuesto de súper: se reserva entero desde el día 1 del mes contable; lo que se gasta en súper lo va gastando */
-function presSuper(){const c=cfg.cats.find(x=>x.id==='super');return c&&!c.oculta?Math.max(0,Number(c.presupuesto)||0):0}
+function presCat(id){const c=cfg.cats.find(x=>x.id===id);return c&&!c.oculta?Math.max(0,Number(c.presupuesto)||0):0}
+function presSuper(){return presCat('super')}
+/* Gasolina: se reserva su presupuesto mensual igual que el súper */
+function resGas(y,m){const mh=mesContHoy();if(y!==mh.y||m!==mh.m)return 0;const pr=presCat('gasolina');if(pr<=0)return 0;const g=deMes(y,m).filter(x=>x.categoria==='gasolina').reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0);return r2(Math.max(0,pr-g))}
 /* Súper que aún falta por gastar este mes (solo el mes contable actual): se resta del ahorro previsto */
 function resSuper(y,m){const mh=mesContHoy();if(y!==mh.y||m!==mh.m)return 0;const pr=presSuper();if(pr<=0)return 0;const g=deMes(y,m).filter(x=>x.categoria==='super').reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0);return r2(Math.max(0,pr-g))}
 /* Ahorro del mes en curso: «ahora» (ingresos − gastos − súper que falta) y «previsto» (además − recibos que faltan − habituales estimados). Deja en t.ahorro el previsto */
 function conPrevisto(t,y,m){
   const mh=mesContHoy();t.prev=null;
   if(y!==mh.y||m!==mh.m)return t;
-  const rs=resSuper(y,m),pend=pendientesFijos(y,m,t),h0=hoy();
+  const rs=resSuper(y,m),rg=resGas(y,m),pend=pendientesFijos(y,m,t),h0=hoy();
   // Recibos ya apuntados con fecha futura (aún no cobrados) + los que faltan por apuntar
   const fut=r2(deMes(y,m).filter(x=>String(x.fecha)>h0).reduce((a,x)=>{const g=catById(x.categoria).grupo;return (g==='fijo'||g==='variable')?a+(x.tipo==='gasto'?x.importe:-x.importe):a},0));
   const fij=r2(fut+pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0)),hab=r2(habituales(y,m).reduce((a,h)=>a+h.importe,0));
-  const prev=r2(t.ahorro-rs-pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0)-hab),ahora=r2(prev+fij+hab);
+  const prev=r2(t.ahorro-rs-rg-pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0)-hab),ahora=r2(prev+fij+hab);
   const pagados=r2(t.gastos-fut);
   let sobrante=null;const q=quedaMes();
   if(q){const ids=new Set(cuentasVis().filter(c=>c.tipo==='dia'||c.tipo==='personal').map(c=>c.id));
     const neu=r2(deMes(y,m).filter(x=>catById(x.categoria).grupo==='neutro'&&ids.has(cuentaDe(x))).reduce((a,x)=>a+(x.tipo==='ingreso'?x.importe:-x.importe),0));
     sobrante=r2(q.saldo-(t.ingreso-pagados)-neu-q.pendA)}
-  t.prev={rs,fij,hab,ahora,pagados,sobrante,diezmo:pend.some(f=>f.porcentaje&&!(f.sugerido>0))};
+  t.prev={rs,rg,fij,hab,ahora,pagados,sobrante,diezmo:pend.some(f=>f.porcentaje&&!(f.sugerido>0))};
   t.ahorro=prev;return t;
 }
 function quedaMes(){
@@ -1078,15 +1082,17 @@ function quedaMes(){
   const esperaNomina=pend.some(f=>f.porcentaje&&!(f.sugerido>0));
   const superPres=presSuper(),superGast=r2(deMes(y,m).filter(x=>x.categoria==='super'&&x.tipo==='gasto').reduce((a,x)=>a+x.importe,0)-deMes(y,m).filter(x=>x.categoria==='super'&&x.tipo==='ingreso').reduce((a,x)=>a+x.importe,0));
   const superFalta=superPres>0?r2(Math.max(0,superPres-superGast)):0;
-  const queda=r2(saldo-fijos-pendA-habit-superFalta);
+  const gasPres=presCat('gasolina'),gasGast=r2(deMes(y,m).filter(x=>x.categoria==='gasolina').reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0));
+  const gasFalta=gasPres>0?r2(Math.max(0,gasPres-gasGast)):0;
+  const queda=r2(saldo-fijos-pendA-habit-superFalta-gasFalta);
   const fin=pe.dias,dias=Math.max(1,diasEntre(hoy(),pe.fin)+1);
   // El ritmo (anillo y aviso) mira solo el gasto del día a día: los recibos fijos no cuentan
   const gastado=Math.max(0,t.variable);
-  const total=gastado+Math.max(queda+superFalta,0);
+  const total=gastado+Math.max(queda+superFalta+gasFalta,0);
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
   const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,partes,saldo,sinCobrar:r2(partes.reduce((a,x)=>a+x.sinCobrar,0)),fijos,pendA,habit,superPres,superGast,superFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
+  return {cuenta:bk,partes,saldo,sinCobrar:r2(partes.reduce((a,x)=>a+x.sinCobrar,0)),fijos,pendA,habit,superPres,superGast,superFalta,gasPres,gasGast,gasFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
 function anilloQueda(q,col,px,centro){
@@ -1123,6 +1129,7 @@ function tarjetaSaldo(compacta){
    +(q.pendA>0?linea('Pedidos de Amazon pendientes de cobro','− '+eur(q.pendA)):'')
    +(q.habit>0?linea('Gastos habituales que aún no han llegado (estimado)','− '+eur(q.habit)):'')
    +(q.superPres>0?linea('Súper que falta por gastar (de '+eur0(q.superPres)+')','− '+eur(q.superFalta)):'')
+   +(q.gasPres>0?linea('Gasolina que falta por gastar (de '+eur0(q.gasPres)+')','− '+eur(q.gasFalta)):'')
    +linea('<b>Para gastar hasta fin de mes</b>','<b>'+eur(q.queda)+'</b>')
    +(q.superPres>0?'<div role="button" tabindex="0" style="cursor:pointer;margin-top:8px" onclick="verCat(\'super\')" aria-label="Ver los movimientos del súper"><div class="small">🛒 Súper: lleváis <b>'+eur(Math.max(0,q.superGast))+'</b> de '+eur0(q.superPres)+(q.superGast>q.superPres?' <b style="color:var(--neg)">(pasados '+eur(q.superGast-q.superPres)+')</b>':'')+' <small class="muted">›</small></div><div class="bar" style="height:8px;margin-top:4px"><i style="width:'+Math.min(100,Math.max(0,q.superGast)/q.superPres*100)+'%;background:'+(q.superGast>q.superPres?'var(--neg)':'var(--brand)')+'"></i></div><p class="small muted" style="margin:4px 0 0">Los '+eur0(q.superPres)+' del súper (se cambian en Ajustes, en Categorías) están reservados desde el principio del mes: no cuentan como dinero libre ni como ahorro.</p></div>':'')
    +(q.pendA>0?'<p class="small muted">Amazon aún no se ha cobrado en el banco, pero ya está descontado de lo que queda. Al importar el extracto desaparece esta línea.</p>':'')
