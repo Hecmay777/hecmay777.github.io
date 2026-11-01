@@ -927,7 +927,7 @@ function borrar(id){updMov(id,{borrado:true});cerrar();render(true);toast('Movid
 
 /* ===================== MOVIMIENTOS ===================== */
 /* Filtro por categoría. Valores especiales: @ing = todos los ingresos, @gas = todos los gastos, @neu = traspasos entre cuentas */
-function coincideCat(m,f){if(!f)return true;const g=catById(m.categoria).grupo;if(f==='@ing')return g==='ingreso';if(f==='@gas')return g==='variable'||g==='fijo';if(f==='@neu')return g==='neutro';return m.categoria===f}
+function coincideCat(m,f){if(!f)return true;if(f.indexOf('@resto:')===0)return f.slice(7).split(',').indexOf(m.categoria)>=0&&m.tipo==='gasto';const g=catById(m.categoria).grupo;if(f==='@ing')return g==='ingreso';if(f==='@gas')return g==='variable'||g==='fijo';if(f==='@neu')return g==='neutro';return m.categoria===f}
 function listaHTML(){
   const q=norm(filtroTxt);
   const list=(movAno?deAno(vm.y):deMes(vm.y,vm.m)).filter(m=>coincideCat(m,filtroCat)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
@@ -962,7 +962,7 @@ function vMovs(){
   let t=calc(movAno?deAno(vm.y):deMes(vm.y,vm.m));if(!movAno)t=conPrevisto(t,vm.y,vm.m);
   return (volver?'<button class="btn ghost sm" style="margin-bottom:10px" onclick="volverDeCat()">← Volver a '+({resumen:'Resumen',consejos:'Consejos'}[volver.vista]||'la pantalla anterior')+'</button>':'')+monthNav()
    +'<div class="kpis"><div class="kpi" role="button" tabindex="0" style="cursor:pointer;'+(filtroCat==='@ing'?'outline:2px solid var(--brand)':'')+'" onclick="filtroCat=filtroCat===\'@ing\'?\'\':\'@ing\';filtroTxt=\'\';render()" aria-label="Ver solo los ingresos"><small>Ingresos ›</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer;'+(filtroCat==='@gas'?'outline:2px solid var(--brand)':'')+'" onclick="filtroCat=filtroCat===\'@gas\'?\'\':\'@gas\';filtroTxt=\'\';render()" aria-label="Ver solo los gastos"><small>Gastos ›</small><b>'+eur(t.gastos)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verAhorro()" aria-label="Ver cómo sale el ahorro"><small>Ahorro ›</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b>'+(t.prev?'<small style="font-size:11.5px">ahora '+eur0(t.prev.ahora)+'</small>':'')+'</div></div>'
-   +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option><option value="@ing"'+(filtroCat==='@ing'?' selected':'')+'>💰 Todos los ingresos</option><option value="@gas"'+(filtroCat==='@gas'?' selected':'')+'>🧾 Todos los gastos</option><option value="@neu"'+(filtroCat==='@neu'?' selected':'')+'>🔁 Traspasos entre cuentas</option>'+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
+   +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option><option value="@ing"'+(filtroCat==='@ing'?' selected':'')+'>💰 Todos los ingresos</option><option value="@gas"'+(filtroCat==='@gas'?' selected':'')+'>🧾 Todos los gastos</option><option value="@neu"'+(filtroCat==='@neu'?' selected':'')+'>🔁 Traspasos entre cuentas</option>'+(filtroCat.indexOf('@resto:')===0?'<option value="'+filtroCat+'" selected>📦 Resto de categorías</option>':'')+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
 }
 
 /* ===================== RESUMEN ===================== */
@@ -1391,7 +1391,7 @@ function resumenMes(){
   if(gastosCat.length){
     const top=gastosCat.slice(0,8).map((x,i)=>({id:x.c.id,lab:x.c.nombre,v:x.v,col:PALETA[i%PALETA.length]}));
     const resto=gastosCat.slice(8).reduce((a,x)=>a+x.v,0);
-    if(resto>0)top.push({lab:'Resto',v:resto,col:PALETA[9]});
+    if(resto>0)top.push({id:'@resto:'+gastosCat.slice(8).map(x=>x.c.id).join(','),lab:'Resto',v:resto,col:PALETA[9]});
     const tot=top.reduce((a,x)=>a+x.v,0);
     h+='<section class="card"><h2>¿En qué se ha ido el dinero?</h2><div class="donutbox">'+donut(top,tot)+'<div class="legend">'+top.map(x=>x.id?'<button type="button" class="lgb" onclick="verCat(\''+x.id+'\')" aria-label="Ver los movimientos de '+esc(x.lab)+'"><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b><em aria-hidden="true">›</em></button>':'<div><i style="background:'+x.col+'"></i><span>'+esc(x.lab)+'</span><b>'+eur0(x.v)+'</b></div>').join('')+'</div></div><p class="muted small" style="margin:8px 0 0">Toca una categoría para ver sus movimientos. Todas las demás están abajo, en «Gastos del día a día» y «Recibos fijos».</p></section>';
   }
