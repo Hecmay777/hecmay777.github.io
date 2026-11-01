@@ -1011,18 +1011,28 @@ const cuentaCat=cat=>cat==='pension'&&cfg.cuentas.some(c=>c.id==='bankinter_h')?
 const cuentaDe=m=>{if(m.origen==='Otro')return '';if(m.cuenta&&cfg.cuentas.some(c=>c.id===m.cuenta))return m.cuenta;const c=cuentaPorClave(m.origen);return c?c.id:cuentaCat(m.categoria)};
 /* Pedido de Amazon apuntado desde el correo que el banco aún no ha cobrado (hasta 14 días). No toca el saldo de la cuenta, pero sí lo que queda del mes */
 const pendAmazon=m=>!m.borrado&&m.origen==='Amazon'&&m.tipo==='gasto'&&/^gmail\|/.test(String(m.importKey||''))&&String(m.fecha)<=hoy()&&String(m.fecha)>=ymd(new Date(Date.now()-14*864e5));
+function movsContados(c){
+  const ts=Number(c.ts)||0;
+  return movs.filter(m=>{
+    if(m.borrado||cuentaDe(m)!==c.id||pendAmazon(m))return false;
+    const f=String(m.fecha);
+    if(f>hoy())return false;
+    return f>c.fecha||(ts&&(Number(m.creado)||0)>ts&&f>=ymd(new Date(ts)));
+  });
+}
 function saldoCuenta(c){
   if(!c||c.saldo===null||c.saldo===undefined||c.saldo==='')return null;
   let s=Number(c.saldo)||0;
-  movs.forEach(m=>{
-    if(m.borrado||cuentaDe(m)!==c.id||pendAmazon(m))return;
-    const f=String(m.fecha);
-    const ts=Number(c.ts)||0;
-    if(f>hoy())return;
-    if(f>c.fecha||(ts&&(Number(m.creado)||0)>ts&&f>=ymd(new Date(ts))))s+=m.tipo==='ingreso'?m.importe:-m.importe;
-  });
+  movsContados(c).forEach(m=>{s+=m.tipo==='ingreso'?m.importe:-m.importe});
   return r2(s);
 }
+/* Recibos fijos apuntados solos que la app ya resta pero el banco aún no ha cobrado */
+function sinCobrarCuenta(c){
+  if(!c||saldoCuenta(c)===null)return 0;
+  return r2(movsContados(c).filter(m=>m.origen==='fijo'&&!m.importKey).reduce((a,m)=>a+(m.tipo==='ingreso'?-m.importe:m.importe),0));
+}
+/* Lo que marca el banco ahora (sin restar los recibos que aún no ha cobrado) */
+function saldoBanco(c){const s=saldoCuenta(c);return s===null?null:r2(s+sinCobrarCuenta(c))}
 /* Presupuesto de súper: se reserva entero desde el día 1 del mes contable; lo que se gasta en súper lo va gastando */
 function presSuper(){const c=cfg.cats.find(x=>x.id==='super');return c&&!c.oculta?Math.max(0,Number(c.presupuesto)||0):0}
 /* Súper que aún falta por gastar este mes (solo el mes contable actual): se resta del ahorro previsto */
@@ -1046,7 +1056,7 @@ function quedaMes(){
   // Dinero para el mes: la cuenta de casa + las cuentas personales (de ahí se pasa a casa); el ahorro va aparte
   const incl=cuentasVis().filter(c=>(c.tipo==='dia'||c.tipo==='personal')&&saldoCuenta(c)!==null);
   const ids=new Set(incl.map(c=>c.id));
-  const partes=incl.map(c=>({nombre:c.nombre,saldo:saldoCuenta(c)}));
+  const partes=incl.map(c=>({nombre:c.nombre,saldo:saldoCuenta(c),banco:saldoBanco(c),sinCobrar:sinCobrarCuenta(c)}));
   const saldo=r2(partes.reduce((a,x)=>a+x.saldo,0));
   const t=calc(deMes(y,m));
   const pend=pendientesFijos(y,m,t).filter(f=>ids.has(cuentaCat(f.cat)));
@@ -1070,7 +1080,7 @@ function quedaMes(){
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
   const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,partes,saldo,fijos,pendA,habit,superPres,superGast,superFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
+  return {cuenta:bk,partes,saldo,sinCobrar:r2(partes.reduce((a,x)=>a+x.sinCobrar,0)),fijos,pendA,habit,superPres,superGast,superFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
 function anilloQueda(q,col,px,centro){
@@ -1100,7 +1110,9 @@ function tarjetaSaldo(compacta){
   const tr=cuentasVis().find(c=>c.tipo==='ahorro'&&saldoCuenta(c)!==null),st=saldoCuenta(tr);
   const linea=(a,b,extra)=>'<div class="bhead" style="padding:4px 0"><span>'+a+'</span><span'+(extra||'')+'>'+b+'</span></div>';
   return '<section class="card"><h2>💶 Lo que os queda este mes</h2>'+cab+'<div style="height:10px"></div>'
-   +q.partes.map(x=>linea('Saldo de '+esc(x.nombre)+' ahora',eur(x.saldo))).join('')
+   +q.partes.map(x=>linea('Saldo de '+esc(x.nombre)+' en el banco',eur(x.banco))).join('')
+   +(q.partes.length>1?linea('<b>Total en el banco</b>','<b>'+eur(r2(q.partes.reduce((a,x)=>a+x.banco,0)))+'</b>'):'')
+   +(q.sinCobrar>0.005?linea('Recibos ya apuntados que el banco aún no cobró','− '+eur(q.sinCobrar)):'')
    +linea('Recibos fijos que faltan por cobrar','− '+eur(q.fijos))
    +(q.pendA>0?linea('Pedidos de Amazon pendientes de cobro','− '+eur(q.pendA)):'')
    +(q.habit>0?linea('Gastos habituales que aún no han llegado (estimado)','− '+eur(q.habit)):'')
@@ -1121,7 +1133,7 @@ function seccionCuentas(){
    +cuentasVis().map(c=>{const s=saldoCuenta(c);const id=c.id;return '<div class="cta"><input class="ctan" value="'+esc(c.nombre)+'" aria-label="Nombre de la cuenta" onchange="setCuenta(\''+id+'\',\'nombre\',this.value)">'
      +'<div class="row2"><label>Tipo<select onchange="setCuenta(\''+id+'\',\'tipo\',this.value)">'+opts(TIPOS_CUENTA,c.tipo)+'</select></label><label>Banco<select onchange="setCuenta(\''+id+'\',\'banco\',this.value)">'+opts(BANCOS,bancoDe(c))+'</select></label></div>'
      +'<label>De quién<select onchange="setCuenta(\''+id+'\',\'persona\',this.value)">'+quien(c)+'</select></label>'
-     +(s!==null?'<p class="small" style="margin:10px 0 4px">Saldo ahora: <b>'+eur(s)+'</b> <span class="muted">(puesto el '+fechaCorta(c.fecha)+')</span></p>':'<p class="small muted" style="margin:10px 0 4px">Sin saldo todavía.</p>')
+     +(s!==null?'<p class="small" style="margin:10px 0 4px">Saldo en el banco: <b>'+eur(saldoBanco(c))+'</b> <span class="muted">(puesto el '+fechaCorta(c.fecha)+')</span></p>'+(sinCobrarCuenta(c)>0.005?'<p class="small muted" style="margin:0 0 4px">Para el cálculo del mes se restan además '+eur(sinCobrarCuenta(c))+' de recibos que el banco aún no ha cobrado: quedan '+eur(s)+'.</p>':''):'<p class="small muted" style="margin:10px 0 4px">Sin saldo todavía.</p>')
      +'<div class="row2"><input id="sal_'+id+'" inputmode="decimal" placeholder="Saldo de hoy"><button class="btn sm" style="margin:4px 0 0" onclick="ponerSaldo(\''+id+'\')">Guardar saldo</button></div>'
      +(cuentasVis().length>1?'<button class="x" style="font-size:15px;margin-top:6px" onclick="quitarCuenta(\''+id+'\')">Quitar esta cuenta</button>':'')+'</div>'}).join('')
    +'<button class="btn ghost" onclick="nuevaCuenta()">+ Añadir cuenta</button></section>';
