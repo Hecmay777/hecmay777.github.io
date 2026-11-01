@@ -133,7 +133,7 @@ code{background:var(--bg);padding:1px 5px;border-radius:5px;font-size:14.5px}
 </style>
 </head>
 <body>
-<header class="top"><div class="wrap topin"><div class="logo">🏡 Cuentas de Casa</div><button id="syncBtn" class="sync" onclick="sincronizar(true)"><i class="dot" id="syncDot"></i><span id="syncTxt">Sin nube</span></button></div></header>
+<header class="top"><div class="wrap topin"><div class="logo">🏡 Cuentas de Casa</div><div style="display:flex;gap:8px;align-items:center"><button id="ojoBtn" class="sync" onclick="alternarOjo()" style="padding:6px 10px" aria-label="Ocultar o mostrar las cantidades"></button><button id="syncBtn" class="sync" onclick="sincronizar(true)"><i class="dot" id="syncDot"></i><span id="syncTxt">Sin nube</span></button></div></div></header>
 <main class="wrap" id="app"></main>
 <nav class="nav"><div>
 <button data-v="apuntar" onclick="ir('apuntar')"><span>➕</span>Apuntar</button>
@@ -156,8 +156,10 @@ const MCORTO=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov',
 const PALETA=['#0f766e','#2563eb','#d97706','#db2777','#7c3aed','#16a34a','#dc2626','#0891b2','#ca8a04','#64748b'];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const r2=n=>Math.round((Number(n)||0)*100)/100;
-const eur=n=>(r2(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
-const eur0=n=>Math.round(Number(n)||0).toLocaleString('es-ES')+' €';
+/* Ojo: con las cantidades ocultas (para enseñar la app a alguien) todo importe sale como «•••• €» */
+let oculto=false;
+const eur=n=>oculto?'•••• €':(r2(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+const eur0=n=>oculto?'•••• €':Math.round(Number(n)||0).toLocaleString('es-ES')+' €';
 const uid=()=>(window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,10);
 const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -167,6 +169,7 @@ const norm=x=>String(x??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUp
 const palabras=x=>norm(x).replace(/[^A-Z0-9Ñ ]/g,' ').split(/\s+/).filter(Boolean);
 
 const memoria={};
+const ICO_OJO='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',ICO_OJO_X='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 6.1A10.5 10.5 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3.2 3.9M6.6 7.6A17 17 0 0 0 2 12s3.5 6 10 6a10 10 0 0 0 4.1-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 const store={
   get(k,d){try{const v=localStorage.getItem(k);if(v!==null)return JSON.parse(v)}catch(e){}return k in memoria?memoria[k]:d},
   set(k,v){memoria[k]=v;try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){if(!store.av){store.av=1;setTimeout(()=>{store.av=0},60000);setTimeout(()=>toast('⚠️ Este móvil no deja guardar más datos. Descarga una copia en Ajustes.'),0)}return false}}
@@ -289,7 +292,7 @@ function defaultCfg(){
 }
 
 /* ===================== estado ===================== */
-let movs=store.get('cc_movs',[]);
+let movs=store.get('cc_movs',[]);oculto=store.get('cc_oculto',false)===true;
 let cfg=store.get('cc_cfg',null)||defaultCfg();
 /* Añade las categorías nuevas de serie a una configuración ya guardada (sin tocar lo demás) */
 function asegurarCats(c){
@@ -406,6 +409,8 @@ function verSinClas(){if(vista!=='movs')volver={vista,y:vm.y,m:vm.m,modo:modoRes
 function verCatAno(id){if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};movAno=true;filtroCat=id;filtroTxt='';ir('movs')}
 function verCat(id){movAno=false;if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};filtroCat=id;filtroTxt='';ir('movs')}
 function volverDeCat(){const v=volver;volver=null;movAno=false;filtroCat='';filtroTxt='';if(!v){ir('resumen');return}vm={y:v.y,m:v.m};modoRes=v.modo;ir(v.vista)}
+function pintarOjo(){const b=$('#ojoBtn');if(!b)return;b.innerHTML=oculto?ICO_OJO_X:ICO_OJO;b.title=oculto?'Mostrar las cantidades':'Ocultar las cantidades';b.setAttribute('aria-pressed',oculto?'true':'false')}
+function alternarOjo(){oculto=!oculto;store.set('cc_oculto',oculto);pintarOjo();render();toast(oculto?'Cantidades ocultas':'Cantidades visibles')}
 function render(sinGuardarForm){
   if(bienv){$('#app').innerHTML=vBienvenida();document.querySelector('.nav').style.display='none';return}
   document.querySelector('.nav').style.display='';
@@ -414,7 +419,7 @@ function render(sinGuardarForm){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===vista));
   const f={apuntar:vApuntar,movs:vMovs,resumen:vResumen,consejos:vConsejos,importar:vImportar,ajustes:vAjustes}[vista];
   $('#app').innerHTML=f();
-  estadoSync();
+  estadoSync();pintarOjo();
   if($('#mercaBox'))cargarMercadona(vm.y+'-'+pad(vm.m+1));
 }
 
@@ -1087,8 +1092,8 @@ function tarjetaSaldo(compacta){
   const aviso=q.queda<0?'No llega para los recibos que quedan: habría que tirar de otra cuenta.':dep?'Llegáis a fin de mes solo gracias al dinero sacado del ahorro.':q.consumo>q.ritmo+0.1?'Vais gastando más deprisa de lo que avanza el mes.':'Vais bien de ritmo.';
   const barra='<div class="bar" style="position:relative;height:10px"><i style="width:'+Math.min(100,q.consumo*100)+'%;background:'+col+'"></i><b title="Hoy" style="position:absolute;top:0;bottom:0;left:'+Math.min(100,q.ritmo*100)+'%;width:2px;background:var(--ink)"></b></div>';
   const grande='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span>'+(q.queda<0?'Faltan':'Os quedan')+'</span><b style="font-size:26px;color:'+col+';font-variant-numeric:tabular-nums">'+eur(Math.abs(q.queda))+'</b></div>';
-  const imp=(q.queda<0?'−':'')+Math.round(Math.abs(q.queda)).toLocaleString('es-ES')+' €';
-  const centro='<text x="50" y="'+(q.queda>0?52:56)+'" text-anchor="middle" font-size="'+(imp.length>7?14:16.5)+'" font-weight="800" fill="'+col+'">'+imp+'</text>'+(q.queda>0?'<text x="50" y="65" text-anchor="middle" font-size="8.5" fill="var(--muted)">'+Math.round(q.porDia)+' € al día</text>':'');
+  const imp=oculto?'•••• €':(q.queda<0?'−':'')+Math.round(Math.abs(q.queda)).toLocaleString('es-ES')+' €';
+  const centro='<text x="50" y="'+(q.queda>0?52:56)+'" text-anchor="middle" font-size="'+(imp.length>7?14:16.5)+'" font-weight="800" fill="'+col+'">'+imp+'</text>'+(q.queda>0?'<text x="50" y="65" text-anchor="middle" font-size="8.5" fill="var(--muted)">'+(oculto?'•••• €':Math.round(q.porDia)+' €')+' al día</text>':'');
   const ring=anilloQueda(q,col,compacta?168:132,centro);
   const cab='<div style="display:flex;align-items:center;gap:14px">'+ring+'<div style="min-width:0;flex:1"><div style="font-weight:600;color:'+col+'">'+aviso+'</div><div class="small muted" style="margin-top:4px">'+(q.queda<0?'Faltan '+eur(-q.queda)+' para los recibos.':dep?'Sin los '+eur(q.delAhorro)+' del ahorro os faltarían '+eur(-q.propio)+'.':'Quedan '+q.dias+' día'+(q.dias>1?'s':'')+' de mes.')+'</div></div></div>';
   if(compacta)return '<section class="card anillo" role="button" aria-label="Ver el detalle de lo que queda" onclick="modoRes=\'mes\';vm=mesContHoy();ir(\'resumen\')">'+ring+'</section>';
