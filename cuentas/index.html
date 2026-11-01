@@ -1059,8 +1059,9 @@ function quedaMes(){
   const superFalta=superPres>0?r2(Math.max(0,superPres-superGast)):0;
   const queda=r2(saldo-fijos-pendA-habit-superFalta);
   const fin=pe.dias,dias=Math.max(1,diasEntre(hoy(),pe.fin)+1);
-  const gastado=Math.max(0,t.gastos);
-  const total=gastado+Math.max(queda,0);
+  // El ritmo (anillo y aviso) mira solo el gasto del día a día: los recibos fijos no cuentan
+  const gastado=Math.max(0,t.variable);
+  const total=gastado+Math.max(queda+superFalta,0);
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
   const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin).reduce((a,x)=>a+x.importe,0));
