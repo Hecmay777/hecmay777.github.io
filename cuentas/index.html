@@ -952,6 +952,7 @@ function verAhorro(){
    +'<div class="bhead" style="padding:12px 0"><span><b>'+(pv0?'Ahorro previsto a fin de mes':'Ahorro')+'</b></span><b class="'+(t.ahorro>=0?'pos':'neg')+'" style="font-size:20px">'+eur(t.ahorro)+'</b></div>'
    +(pct!==null?'<p class="small" style="margin:0 0 8px">Es el <b>'+pct+' %</b> de los ingresos'+(med!==null?'. De media, en los meses anteriores, fue el <b>'+med+' %</b>.':'.')+'</p>':'')
    +(Math.abs(t.neutro)>0.005?'<p class="muted small" style="margin:0 0 8px">🔁 Los traspasos entre cuentas y las inversiones ('+eur(Math.abs(t.neutro))+') no entran en esta cuenta.</p>':'')
+   +(pv0&&pv0.sobrante!==null&&Math.abs(pv0.sobrante)>=1?'<p class="small" style="margin:0 0 8px">💡 Sobrante de antes del día '+diaCierre()+': <b>'+eur(pv0.sobrante)+'</b>. Ya estaba en las cuentas al empezar el periodo, por eso «Lo que os queda» sale '+(pv0.sobrante>0?'más alto':'más bajo')+' que este ahorro.</p>':'')
    +'<p class="muted small" style="margin:0 0 8px">'+(pv0?(pv0.diezmo?'Falta calcular el diezmo: se restará cuando entre la nómina, así que el ahorro previsto bajará algo. ':'')+'El previsto ya descuenta lo que falta del súper, los recibos que quedan y los gastos habituales estimados. ':'')+'Toca Ingresos o Gastos para ver sus movimientos.</p>'
    +'<button class="btn" onclick="cerrar()">Cerrar</button>';
   abrir();
@@ -1046,7 +1047,12 @@ function conPrevisto(t,y,m){
   const fut=r2(deMes(y,m).filter(x=>String(x.fecha)>h0).reduce((a,x)=>{const g=catById(x.categoria).grupo;return (g==='fijo'||g==='variable')?a+(x.tipo==='gasto'?x.importe:-x.importe):a},0));
   const fij=r2(fut+pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0)),hab=r2(habituales(y,m).reduce((a,h)=>a+h.importe,0));
   const prev=r2(t.ahorro-rs-pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0)-hab),ahora=r2(prev+fij+hab);
-  t.prev={rs,fij,hab,ahora,pagados:r2(t.gastos-fut),diezmo:pend.some(f=>f.porcentaje&&!(f.sugerido>0))};
+  const pagados=r2(t.gastos-fut);
+  let sobrante=null;const q=quedaMes();
+  if(q){const ids=new Set(cuentasVis().filter(c=>c.tipo==='dia'||c.tipo==='personal').map(c=>c.id));
+    const neu=r2(deMes(y,m).filter(x=>catById(x.categoria).grupo==='neutro'&&ids.has(cuentaDe(x))).reduce((a,x)=>a+(x.tipo==='ingreso'?x.importe:-x.importe),0));
+    sobrante=r2(q.saldo-(t.ingreso-pagados)-neu-q.pendA)}
+  t.prev={rs,fij,hab,ahora,pagados,sobrante,diezmo:pend.some(f=>f.porcentaje&&!(f.sugerido>0))};
   t.ahorro=prev;return t;
 }
 function quedaMes(){
