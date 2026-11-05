@@ -63,8 +63,9 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--muted);font-size:15.5
 .cat{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;position:relative}
 .icoc.mas{background:transparent;border:2px dashed var(--muted);color:var(--muted);font-size:30px;font-weight:300}
 .cat.quitar .icoc{animation:temblor .35s ease-in-out infinite alternate}.cat .menos{position:absolute;top:-2px;right:calc(50% - 36px);width:22px;height:22px;border-radius:50%;background:var(--neg);color:#fff;font-weight:800;line-height:20px;font-size:18px;box-shadow:0 0 0 2px var(--card)}
+.cat.orden{touch-action:none;cursor:grab}.cat.orden .icoc{animation:temblor .35s ease-in-out infinite alternate}.cat.arrastrando{z-index:6;cursor:grabbing;transition:none;position:relative}.cat.arrastrando .icoc{animation:none;box-shadow:0 8px 18px rgba(0,0,0,.28)}
 @keyframes temblor{from{transform:rotate(-3deg)}to{transform:rotate(3deg)}}
-@media (prefers-reduced-motion:reduce){.cat.quitar .icoc{animation:none}}
+@media (prefers-reduced-motion:reduce){.cat.quitar .icoc,.cat.orden .icoc{animation:none}}
 .pick{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:8px 0 4px}.pick button{border:0;background:transparent;padding:0;display:grid;place-items:center;cursor:pointer}.pick .icoc{width:44px;height:44px}.pick button.on .icoc,.pick button.on .sw{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--ink)}
 .sw{width:34px;height:34px;border-radius:50%;display:block}
 .cat.on{background:transparent;box-shadow:none}.cat.on .icoc{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--ink)}.cat.on small{font-weight:700}
@@ -404,7 +405,7 @@ function finBienvenida(a){
   else{vista='apuntar';render();toast('¡Listo! Ya puedes apuntar tu primer gasto')}
 }
 let volver=null; // pantalla de la que venimos al abrir una categoría (para poder volver)
-function ir(v){if(vista==='apuntar'&&$('#fImp'))leerForm();if(v!=='movs'){volver=null;movAno=false}vista=v;render();window.scrollTo(0,0)}
+function ir(v){modoOrden=false;if(vista==='apuntar'&&$('#fImp'))leerForm();if(v!=='movs'){volver=null;movAno=false}vista=v;render();window.scrollTo(0,0)}
 function verSinClas(){if(vista!=='movs')volver={vista,y:vm.y,m:vm.m,modo:modoRes};const l=movs.filter(m=>!m.borrado&&m.categoria==='sin_clasificar').map(m=>mesCont(m)).sort();const u=(l[l.length-1]||'').split('-');if(u.length===2)vm={y:+u[0],m:+u[1]-1};verCat('sin_clasificar')}
 function verCatAno(id){if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};movAno=true;filtroCat=id;filtroTxt='';ir('movs')}
 function verCat(id){movAno=false;if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};filtroCat=id;filtroTxt='';ir('movs')}
@@ -803,8 +804,10 @@ function bancoDeTexto(texto){
 function fTocar(){form.fTocada=1}
 function leerForm(){form.imp=$('#fImp').value;form.nota=$('#fNota').value;if(form.fTocada)form.fecha=$('#fFecha').value;else form.fecha='';form.quien=$('#fQuien').value}
 function vApuntar(){
-  const grid=(g,extra)=>'<div class="grid">'+visibles(g).filter(c=>g!=='neutro'||!c.destacada).concat(g==='variable'?cfg.cats.filter(c=>c.destacada&&c.grupo==='neutro'&&!c.oculta):[]).map(c=>'<button class="cat'+(form.cat===c.id?' on':'')+(modoQuitar?' quitar':'')+'" onclick="tocarCat(\''+c.id+'\')" onpointerdown="lpIni(\''+c.id+'\')" onpointerup="lpFin()" onpointerleave="lpFin()" onpointercancel="lpFin()" oncontextmenu="return false">'+icoCat(c)+(modoQuitar?'<span class="menos" aria-hidden="true">−</span>':'')+'<small>'+esc(c.nombre)+'</small></button>').join('')
-    +(extra?'<button class="cat" onclick="editarCat(null,\''+g+'\')">'+'<span class="icoc mas" aria-hidden="true">+</span><small>Añadir</small></button><button class="cat" onclick="modoQuitar=!modoQuitar;render()"><span class="icoc mas" aria-hidden="true">'+(modoQuitar?'✓':'−')+'</span><small>'+(modoQuitar?'Listo':'Quitar')+'</small></button>':'')+'</div>';
+  const lista=g=>{let l=visibles(g).filter(c=>g!=='neutro'||!c.destacada).concat(g==='variable'?cfg.cats.filter(c=>c.destacada&&c.grupo==='neutro'&&!c.oculta):[]);if(cfg.ordenGrid&&cfg.ordenGrid[g])l=l.slice().sort((a,b)=>cfg.cats.indexOf(a)-cfg.cats.indexOf(b));return l};
+  const grid=(g,extra)=>'<div class="grid" data-g="'+g+'">'+lista(g).map(c=>'<button class="cat'+(form.cat===c.id?' on':'')+(modoQuitar?' quitar':'')+(modoOrden?' orden':'')+'" data-id="'+c.id+'" onclick="tocarCat(\''+c.id+'\')" '+(modoOrden?'onpointerdown="ordIni(event,\''+c.id+'\')" onpointermove="ordMov(event)" onpointerup="ordFin(event)" onpointercancel="ordFin(event)"':'onpointerdown="lpIni(\''+c.id+'\')" onpointerup="lpFin()" onpointerleave="lpFin()" onpointercancel="lpFin()"')+' oncontextmenu="return false">'+icoCat(c)+(modoQuitar?'<span class="menos" aria-hidden="true">−</span>':'')+'<small>'+esc(c.nombre)+'</small></button>').join('')
+    +(extra&&modoOrden?'<button class="cat" onclick="modoOrden=false;render()"><span class="icoc mas" aria-hidden="true">✓</span><small>Listo</small></button>':'')
+    +(extra&&!modoOrden?'<button class="cat" onclick="editarCat(null,\''+g+'\')">'+'<span class="icoc mas" aria-hidden="true">+</span><small>Añadir</small></button><button class="cat" onclick="modoQuitar=!modoQuitar;render()"><span class="icoc mas" aria-hidden="true">'+(modoQuitar?'✓':'−')+'</span><small>'+(modoQuitar?'Listo':'Quitar')+'</small></button><button class="cat" onclick="modoQuitar=false;modoOrden=true;render()"><span class="icoc mas" aria-hidden="true">⇅</span><small>Ordenar</small></button>':'')+'</div>'+(extra&&modoOrden?'<p class="muted small" style="text-align:center;margin:10px 0 0">Arrastra los iconos para ponerlos donde quieras y toca «Listo».</p>':'');
   const sel=form.cat?catById(form.cat):null;
   const subs=sel&&sel.subs&&sel.subs.length?'<h3>Detalle</h3><div class="chips">'+sel.subs.map((s,i)=>'<button class="chip'+(form.sub===s?' on':'')+'" onclick="selSub('+i+')">'+esc(s)+'</button>').join('')+'</div>':'';
   const atajos='';const _atajosViejos=form.tipo==='gasto'&&cfg.atajos.length?'<div class="chips">'+cfg.atajos.map((a,i)=>'<button class="chip" onclick="usarAtajo('+i+')">'+catById(a.cat).icono+' '+esc(a.nombre)+(a.importe?' '+eur(a.importe):'')+'</button>').join('')+'</div>':'';
@@ -821,12 +824,45 @@ function vApuntar(){
 ;
 }
 
+/* Ordenar iconos: arrastrar con el dedo; el orden se guarda en la configuración (y en la hoja de Google) */
+let modoOrden=false,ord=null;
+function ordIni(e,id){
+  if(!modoOrden)return;
+  const el=e.currentTarget;ord={el:el,grid:el.parentElement,sx:e.clientX,sy:e.clientY,mov:false};
+  try{el.setPointerCapture(e.pointerId)}catch(_){}
+}
+function ordMov(e){
+  if(!ord)return;const el=ord.el;
+  if(!ord.mov&&Math.hypot(e.clientX-ord.sx,e.clientY-ord.sy)<6)return;
+  ord.mov=true;el.classList.add('arrastrando');
+  const t=document.elementsFromPoint(e.clientX,e.clientY).find(n=>n!==el&&n.classList&&n.classList.contains('cat')&&n.dataset.id&&n.parentElement===ord.grid);
+  if(t){
+    const r0=el.getBoundingClientRect();
+    const despues=!!(el.compareDocumentPosition(t)&Node.DOCUMENT_POSITION_FOLLOWING);
+    ord.grid.insertBefore(el,despues?t.nextSibling:t);
+    const r1=el.getBoundingClientRect();ord.sx+=r1.left-r0.left;ord.sy+=r1.top-r0.top;
+  }
+  el.style.transform='translate('+(e.clientX-ord.sx)+'px,'+(e.clientY-ord.sy)+'px) scale(1.12)';
+}
+function ordFin(e){
+  if(!ord)return;const el=ord.el,g=ord.grid;const mov=ord.mov;ord=null;
+  el.style.transform='';el.classList.remove('arrastrando');
+  if(!mov)return;
+  lpHecho=true;setTimeout(()=>{lpHecho=false},0);
+  const ids=[...g.querySelectorAll('.cat[data-id]')].map(n=>n.dataset.id),set=new Set(ids);
+  const slots=[];cfg.cats.forEach((c,i)=>{if(set.has(c.id))slots.push(i)});
+  const porId={};cfg.cats.forEach(c=>{porId[c.id]=c});
+  ids.forEach((id,k)=>{cfg.cats[slots[k]]=porId[id]});
+  cfg.ordenGrid=cfg.ordenGrid||{};cfg.ordenGrid[g.dataset.g]=true;
+  saveCfg();
+}
 /* Categorías: pulsación larga para editar, + para añadir, − para quitar de la pantalla */
 let modoQuitar=false,lpT=null,lpHecho=false;
 function lpIni(id){lpHecho=false;clearTimeout(lpT);lpT=setTimeout(()=>{lpHecho=true;if(navigator.vibrate)navigator.vibrate(20);editarCat(id)},600)}
 function lpFin(){clearTimeout(lpT)}
 function tocarCat(id){
   if(lpHecho){lpHecho=false;return}
+  if(modoOrden)return;
   if(modoQuitar){quitarCat(id);return}
   selCat(id);
 }
