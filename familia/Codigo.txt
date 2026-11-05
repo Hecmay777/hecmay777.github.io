@@ -1,0 +1,229 @@
+/**
+ * CUENTAS DE CASA — conexión con Google Sheets
+ * ------------------------------------------------------------
+ * Para compartir los datos entre dos móviles y tener copia en tu Drive.
+ *
+ * 1. Cambia la CLAVE de abajo por una contraseña inventada y larga.
+ *    (Es la misma que pondréis los dos en la app.)
+ * 2. Guarda (icono del disquete).
+ * 3. Implementar → Nueva implementación → tipo "Aplicación web"
+ *      Ejecutar como: Yo
+ *      Quién tiene acceso: Cualquier usuario
+ *    Acepta los permisos que pide Google.
+ * 4. Copia la URL que acaba en /exec y pégala en la app (Ajustes),
+ *    junto con la clave.
+ *
+ * Este código NUNCA borra filas: lo que mandas a la papelera
+ * solo queda marcado como "borrado".
+ */
+const CLAVE = 'CAMBIA-ESTA-CLAVE';
+
+const COLS = ['id','fecha','tipo','importe','categoria','sub','nota','quien','origen','importKey','borrado','creado','modificado','srv','cuenta']; // 'cuenta' va al final para no mover los índices 12 (modificado) y 13 (srv)
+const MESES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+function doGet() {
+  return ContentService.createTextOutput('Cuentas de Casa: la conexión funciona ✔');
+}
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (CLAVE === 'CAMBIA-ESTA-CLAVE') return salida({ ok: false, error: 'Falta cambiar la clave en el código' });
+    if (req.clave !== CLAVE) return salida({ ok: false, error: 'Clave incorrecta' });
+
+    const ahora = Date.now();
+    if (req.accion === 'probar') return salida({ ok: true, ahora: ahora });
+    if (req.accion === 'ocr') return salida(leerImagen(req));
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const tz = ss.getSpreadsheetTimeZone();
+    const sh = hojaMovimientos(ss);
+
+    const ultima = sh.getLastRow();
+    const datos = ultima > 1 ? sh.getRange(2, 1, ultima - 1, COLS.length).getValues() : [];
+    const indice = {};
+    datos.forEach(function (f, i) { indice[String(f[0])] = i; });
+
+    let cambios = false;
+    (req.movs || []).forEach(function (m) {
+      const fila = COLS.map(function (c) {
+        if (c === 'srv') return ahora;
+        const v = m[c];
+        return (v === undefined || v === null) ? '' : v;
+      });
+      const i = indice[String(m.id)];
+      if (i !== undefined) {
+        if ((Number(m.modificado) || 0) >= (Number(datos[i][12]) || 0)) { datos[i] = fila; cambios = true; }
+      } else {
+        indice[String(m.id)] = datos.length;
+        datos.push(fila);
+        cambios = true;
+      }
+    });
+    if (cambios && datos.length) {
+      sh.getRange(2, 1, datos.length, COLS.length).setValues(datos);
+    }
+
+    const desde = Number(req.desde) || 0;
+    const nuevos = datos.filter(function (f) { return (Number(f[13]) || 0) > desde; }).map(function (f) {
+      const o = {};
+      COLS.forEach(function (c, j) {
+        let v = f[j];
+        if (v instanceof Date) v = Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+        o[c] = v;
+      });
+      o.id = String(o.id);
+      o.fecha = String(o.fecha);
+      return o;
+    });
+
+    const cfg = guardarAjustes(ss, req.cfg);
+
+    if (cambios && cfg) {
+      const anos = {};
+      (req.movs || []).forEach(function (m) { const a = Number(String(m.fecha).slice(0, 4)); anos[a] = true; if (String(m.fecha).slice(5, 7) === '12') anos[a + 1] = true; });
+      Object.keys(anos).forEach(function (a) { if (/^\d{4}$/.test(a)) resumenAnual(ss, Number(a), datos, cfg, tz); });
+    }
+
+    return salida({ ok: true, ahora: ahora, movs: nuevos, cfg: cfg });
+  } catch (err) {
+    return salida({ ok: false, error: String(err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function hojaMovimientos(ss) {
+  let sh = ss.getSheetByName('Movimientos');
+  if (!sh) {
+    sh = ss.insertSheet('Movimientos', 0);
+    sh.getRange(1, 1, 1, COLS.length).setValues([COLS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  if (sh.getMaxColumns() < COLS.length) sh.insertColumnsAfter(sh.getMaxColumns(), COLS.length - sh.getMaxColumns());
+  if (!sh.getRange(1, COLS.length).getValue()) sh.getRange(1, COLS.length).setValue('cuenta').setFontWeight('bold');
+  // Columnas de texto: evita que Google convierta fechas o notas en otra cosa
+  ['A', 'B', 'C', 'E', 'F', 'G', 'H', 'I', 'J'].forEach(function (col) {
+    sh.getRange(col + ':' + col).setNumberFormat('@');
+  });
+  return sh;
+}
+
+function guardarAjustes(ss, cfg) {
+  let sh = ss.getSheetByName('Ajustes app');
+  if (!sh) {
+    sh = ss.insertSheet('Ajustes app');
+    sh.getRange('A1:B1').setValues([['Ajustes de la app (no tocar)', 'modificado']]);
+  }
+  let actual = null;
+  try { actual = JSON.parse(sh.getRange('A2').getValue() || 'null'); } catch (e) { actual = null; }
+  if (cfg && (!actual || (Number(cfg.modificado) || 0) > (Number(actual.modificado) || 0))) {
+    sh.getRange('A2:B2').setValues([[JSON.stringify(cfg), Number(cfg.modificado) || 0]]);
+    actual = cfg;
+  }
+  return actual;
+}
+
+/* Hoja "Resumen AAAA" con el mismo estilo que tu Excel: categorías × meses */
+function resumenAnual(ss, ano, datos, cfg, tz) {
+  const cats = {};
+  cfg.cats.forEach(function (c) { cats[c.id] = c; });
+  const suma = {};
+  datos.forEach(function (f) {
+    const fecha = f[1] instanceof Date ? Utilities.formatDate(f[1], tz, 'yyyy-MM-dd') : String(f[1]);
+    if (f[10] === true || String(f[10]).toUpperCase() === 'TRUE') return;
+    let y = Number(fecha.slice(0, 4)), mes = Number(fecha.slice(5, 7)) - 1;
+    // Nóminas cobradas a final de mes: cuentan para el mes siguiente (igual que en la app)
+    const diaNom = Number((cfg.nominaSig || {}).dia) || 0;
+    if (diaNom && f[2] === 'ingreso' && /^nomina/.test(String(f[4])) && Number(fecha.slice(8, 10)) >= diaNom) { mes++; if (mes > 11) { mes = 0; y++; } }
+    if (y !== Number(ano)) return;
+    if (mes < 0 || mes > 11) return;
+    const c = cats[f[4]] || { id: f[4], grupo: 'variable' };
+    const imp = Number(f[3]) || 0;
+    const v = c.grupo === 'ingreso' ? (f[2] === 'ingreso' ? imp : -imp) : (f[2] === 'gasto' ? -imp : imp);
+    if (!suma[c.id]) suma[c.id] = [0,0,0,0,0,0,0,0,0,0,0,0];
+    suma[c.id][mes] += v;
+  });
+  const r = function (n) { return Math.round(n * 100) / 100; };
+  const tot = function (a) { return r(a.reduce(function (x, y) { return x + y; }, 0)); };
+  const vacia = function () { return ['', '', '', '', '', '', '', '', '', '', '', '', '', '']; };
+
+  const filas = [['CUENTAS ' + ano].concat(MESES, ['TOTAL'])];
+  const totales = {};
+  [['INGRESOS', 'ingreso'], ['RECIBOS FIJOS', 'fijo'], ['GASTOS DEL DÍA A DÍA', 'variable'], ['NO CUENTAN (traspasos, inversión)', 'neutro']].forEach(function (g) {
+    const t = vacia(); t[0] = g[0]; filas.push(t);
+    const acc = [0,0,0,0,0,0,0,0,0,0,0,0];
+    cfg.cats.filter(function (c) { return c.grupo === g[1]; }).forEach(function (c) {
+      const v = (suma[c.id] || [0,0,0,0,0,0,0,0,0,0,0,0]).map(r);
+      if (c.oculta && tot(v.map(Math.abs)) === 0) return;
+      filas.push([c.nombre].concat(v, [tot(v)]));
+      v.forEach(function (x, i) { acc[i] += x; });
+    });
+    totales[g[1]] = acc.map(r);
+    filas.push(['TOTAL ' + g[0]].concat(totales[g[1]], [tot(totales[g[1]])]));
+    filas.push(vacia());
+  });
+  const gastos = totales.fijo.map(function (x, i) { return r(x + totales.variable[i]); });
+  const ahorro = totales.ingreso.map(function (x, i) { return r(x + gastos[i]); });
+  let a = 0;
+  const acum = ahorro.map(function (x) { a += x; return r(a); });
+  filas.push(['TOTAL GASTOS'].concat(gastos, [tot(gastos)]));
+  filas.push(['AHORRO DEL MES'].concat(ahorro, [tot(ahorro)]));
+  filas.push(['AHORRO ACUMULADO'].concat(acum, [acum[11]]));
+
+  const nombre = 'Resumen ' + ano;
+  const sh = ss.getSheetByName(nombre) || ss.insertSheet(nombre);
+  sh.clear();
+  sh.getRange(1, 1, filas.length, 14).setValues(filas);
+  sh.getRange(1, 1, 1, 14).setFontWeight('bold');
+  sh.getRange(2, 2, filas.length - 1, 13).setNumberFormat('#,##0.00 €');
+  filas.forEach(function (f, i) {
+    if (/^(TOTAL|AHORRO|INGRESOS$|RECIBOS|GASTOS DEL|NO CUENTAN)/.test(String(f[0]))) sh.getRange(i + 1, 1, 1, 14).setFontWeight('bold');
+  });
+  sh.setFrozenRows(1);
+  sh.setFrozenColumns(1);
+  sh.autoResizeColumn(1);
+}
+
+/* Foto o captura (desde la app): la convierte en texto con Google Drive */
+function ocrBytes(bytes, mime) {
+  let id = null;
+  try {
+    const limite = 'cuentasdecasa' + Date.now();
+    const meta = JSON.stringify({ name: 'imagen-temporal', mimeType: 'application/vnd.google-apps.document' });
+    const cuerpo = Utilities.newBlob('--' + limite + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta +
+        '\r\n--' + limite + '\r\nContent-Type: ' + mime + '\r\n\r\n').getBytes()
+      .concat(bytes)
+      .concat(Utilities.newBlob('\r\n--' + limite + '--').getBytes());
+    const r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=es', {
+      method: 'post', contentType: 'multipart/related; boundary=' + limite, payload: cuerpo,
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true
+    });
+    if (r.getResponseCode() !== 200) { Logger.log('No se pudo leer la imagen: ' + r.getContentText()); return null; }
+    id = JSON.parse(r.getContentText()).id;
+    return DocumentApp.openById(id).getBody().getText();
+  } catch (e) {
+    Logger.log('No se pudo leer la imagen: ' + e);
+    return null;
+  } finally {
+    if (id) { try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {} }
+  }
+}
+
+/* Lee el texto de una foto o captura (desde la app) */
+function leerImagen(req) {
+  try {
+    const mime = /^(image\/(jpeg|png|webp|gif)|application\/pdf)$/.test(String(req.mime)) ? String(req.mime) : 'image/jpeg';
+    const texto = ocrBytes(Utilities.base64Decode(String(req.imagen || '')), mime);
+    if (texto === null) return { ok: false, error: 'Google no ha podido leer la imagen' };
+    return { ok: true, texto: texto };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+function salida(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
