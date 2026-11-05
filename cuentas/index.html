@@ -982,7 +982,7 @@ function habituales(y,m){
 function pendientesFijos(y,m,t){
   const list=deMes(y,m);
   return cfg.fijos.filter(f=>(!f.mes||f.mes===m+1)&&!list.some(x=>x.categoria===f.cat)&&!movs.some(x=>x.borrado&&x.id==='fx_'+f.cat+'_'+y+'-'+pad(m+1))).map(f=>{
-    const imp=f.porcentaje?r2(t.ingreso*f.porcentaje/100):f.importe;
+    const imp=f.porcentaje?redDec(t.ingreso*f.porcentaje/100):f.importe;
     return Object.assign({},f,{sugerido:imp});
   });
 }
@@ -1014,6 +1014,8 @@ const cuentaCat=cat=>cat==='pension'&&cfg.cuentas.some(c=>c.id==='bankinter_h')?
 const cuentaDe=m=>{if(m.origen==='Otro')return '';if(m.cuenta&&cfg.cuentas.some(c=>c.id===m.cuenta))return m.cuenta;const c=cuentaPorClave(m.origen);return c?c.id:cuentaCat(m.categoria)};
 /* Pedido de Amazon apuntado desde el correo que el banco aún no ha cobrado (hasta 14 días). No toca el saldo de la cuenta, pero sí lo que queda del mes */
 const pendAmazon=m=>!m.borrado&&m.origen==='Amazon'&&m.tipo==='gasto'&&/^gmail\|/.test(String(m.importKey||''))&&String(m.fecha)<=hoy()&&String(m.fecha)>=ymd(new Date(Date.now()-14*864e5));
+/* El diezmo se redondea siempre hacia arriba a la decena siguiente (392,86 → 400) */
+function redDec(v){const c=Math.round(v*100);return c<=0?0:Math.ceil(c/1000)*10}
 function movsContados(c){
   const ts=Number(c.ts)||0;
   return movs.filter(m=>{
@@ -1086,6 +1088,7 @@ function quedaMes(){
   const gasPres=presCat('gasolina'),gasGast=r2(deMes(y,m).filter(x=>x.categoria==='gasolina').reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0));
   const gasFalta=gasPres>0?r2(Math.max(0,gasPres-gasGast)):0;
   const queda=r2(saldo-fijos-pendA-habit-superFalta-gasFalta);
+  const yaAhorro=r2(movs.filter(x=>!x.borrado&&ids.has(cuentaDe(x))&&(x.categoria==='hucha'||x.categoria==='inversion')&&x.fecha>=pe.ini&&x.fecha<=pe.fin&&x.fecha<=h0).reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0));
   const fin=pe.dias,dias=Math.max(1,diasEntre(hoy(),pe.fin)+1);
   // El ritmo (anillo y aviso) mira solo el gasto del día a día: los recibos fijos no cuentan
   const gastado=Math.max(0,t.variable);
@@ -1093,7 +1096,7 @@ function quedaMes(){
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
   const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,partes,saldo,sinCobrar:r2(partes.reduce((a,x)=>a+x.sinCobrar,0)),fijos,pendA,habit,superPres,superGast,superFalta,gasPres,gasGast,gasFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
+  return {cuenta:bk,yaAhorro,partes,saldo,sinCobrar:r2(partes.reduce((a,x)=>a+x.sinCobrar,0)),fijos,pendA,habit,superPres,superGast,superFalta,gasPres,gasGast,gasFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
 function anilloQueda(q,col,px,centro){
@@ -1137,6 +1140,7 @@ function tarjetaSaldo(compacta){
    +(q.esperaNomina?'<p class="small muted">El diezmo se sumará cuando entre la nómina.</p>':'')
    +(q.sinImporte.length?'<p class="small muted">Sin importe todavía: '+q.sinImporte.map(esc).join(', ')+'. Cuando llegue la factura, apúntala.</p>':'')
    +(q.delAhorro>0?'<p class="small" style="margin-top:8px;color:var(--warn)"><b>⚠️ Sacado del ahorro este mes: '+eur(q.delAhorro)+'</b>. Es dinero que en principio no se toca.'+(q.queda>=0?' Sin él, os '+(q.propio<0?'faltarían '+eur(-q.propio):'quedarían '+eur(q.propio))+'.':'')+'</p>':'')
+   +(q.yaAhorro>0.005?'<p class="small" style="margin-top:8px">🐖 <b>Ya pasado a ahorro este mes: '+eur(q.yaAhorro)+'</b>. Ya está descontado de lo que queda.</p>':'')
    +(st!==null?'<p class="small muted" style="margin-top:8px">🏦 Ahorro en '+esc(tr.nombre)+': <b>'+eur(st)+'</b></p>':'')
    +'<p class="small muted">Saldo puesto el '+fechaCorta(q.cuenta.fecha)+'. <a href="#" onclick="ir(\'ajustes\');return false">Actualizar</a></p></section>';
 }
@@ -1432,11 +1436,11 @@ function generarFijos(){
     const ex=movs.find(x=>x.id===id);
     const ingresos=()=>calc(deMes(y,m)).ingreso;
     if(ex){ // el diezmo se recalcula mientras nadie lo haya cambiado a mano
-      if(f.porcentaje&&!ex.borrado&&String(ex.nota).endsWith(AUTO)){const v=r2(ingresos()*f.porcentaje/100);if(v>0&&Math.abs(v-ex.importe)>=0.01){Object.assign(ex,{importe:v,modificado:Date.now(),pend:true});cambio=true}}
+      if(f.porcentaje&&!ex.borrado&&String(ex.nota).endsWith(AUTO)){const v=redDec(ingresos()*f.porcentaje/100);if(v>0&&Math.abs(v-ex.importe)>=0.01){Object.assign(ex,{importe:v,modificado:Date.now(),pend:true});cambio=true}}
       return;
     }
     if(movs.some(x=>!x.borrado&&x.categoria===f.cat&&mesCont(x)===ym))return; // ya está (banco o a mano)
-    let imp=f.porcentaje?r2(ingresos()*f.porcentaje/100):(f.auto==='ultimo'?(ultimoImporteBanco(f.cat,ym)??f.importe):f.importe);
+    let imp=f.porcentaje?redDec(ingresos()*f.porcentaje/100):(f.auto==='ultimo'?(ultimoImporteBanco(f.cat,ym)??f.importe):f.importe);
     if(!imp||imp<=0)return;
     const fy=(cc&&f.dia>=cc)?(m===0?y-1:y):y,fm=(cc&&f.dia>=cc)?(m===0?11:m-1):m,mv=nuevoMov({fecha:fy+'-'+pad(fm+1)+'-'+pad(Math.min(f.dia,new Date(fy,fm+1,0).getDate())),tipo:'gasto',importe:imp,categoria:f.cat,nota:(f.porcentaje?'Diezmo '+f.porcentaje+' %':'Recibo fijo')+AUTO,quien:yo,origen:'fijo'});
     mv.id=id;movs.push(mv);cambio=true;
