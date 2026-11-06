@@ -340,14 +340,16 @@ function updMov(id,ch){const m=movs.find(x=>x.id===id);if(!m)return;Object.assig
 /* Mes en el que cuenta un apunte: las nóminas cobradas a final de mes cuentan para el mes siguiente */
 const esNomina=m=>m.tipo==='ingreso'&&/^nomina/.test(String(m.categoria||''));
 /* Mes contable: empieza el día «cierre» del mes anterior y acaba el día antes del cierre (con cierre 28: del 28 oct al 27 nov es noviembre). Con 0 se usan meses naturales */
-function diaCierre(){const d=Number((cfg.cierre||{}).dia);return d>=2&&d<=29?d:0}
-function mesDeFecha(f){f=String(f);const y=+f.slice(0,4),mm=+f.slice(5,7),dd=+f.slice(8,10),c=diaCierre();if(c&&dd>=c)return mm===12?(y+1)+'-01':y+'-'+pad(mm+1);return f.slice(0,7)}
+function diaCierre(){const d=Number((cfg.cierre||{}).dia);return d>=2&&d<=31?d:0}
+/* Día en que empieza el periodo en el mes m0 (0-11): hasta el 29 es ese día; 30 y 31 significan «el último día del mes si el mes es más corto» */
+function limiteMes(y,m0,c){return c<=29?c:Math.min(c,new Date(y,m0+1,0).getDate())}
+function mesDeFecha(f){f=String(f);const y=+f.slice(0,4),mm=+f.slice(5,7),dd=+f.slice(8,10),c=diaCierre();if(c&&dd>=limiteMes(y,mm-1,c))return mm===12?(y+1)+'-01':y+'-'+pad(mm+1);return f.slice(0,7)}
 function mesContHoy(){const s=mesDeFecha(hoy());return {y:+s.slice(0,4),m:+s.slice(5,7)-1}}
 function vmDeFecha(f){const s=mesDeFecha(f);return {y:+s.slice(0,4),m:+s.slice(5,7)-1}}
 function diasEntre(a,b){const q=x=>{const p=String(x).split('-');return Date.UTC(+p[0],+p[1]-1,+p[2])};return Math.round((q(b)-q(a))/864e5)}
 function periodo(y,m){
   const c=diaCierre();let ini,fin;
-  if(c){const a=new Date(y,m-1,c),b=new Date(y,m,c-1);ini=ymd(a);fin=ymd(b)}
+  if(c){const a=new Date(y,m-1,limiteMes(y,m-1,c)),b=new Date(y,m,limiteMes(y,m,c)-1);ini=ymd(a);fin=ymd(b)}
   else{ini=y+'-'+pad(m+1)+'-01';fin=y+'-'+pad(m+1)+'-'+pad(new Date(y,m+1,0).getDate())}
   return {ini,fin,dias:diasEntre(ini,fin)+1};
 }
@@ -1877,7 +1879,7 @@ function vAjustes(){
   const mesOpts=sel=>'<option value="0">Cada mes</option>'+MESES.map((m,i)=>'<option value="'+(i+1)+'"'+(sel===i+1?' selected':'')+'>Solo '+m.toLowerCase()+'</option>').join('');
   return '<section class="card"><h2>¿Quién usa este móvil?</h2><div class="seg">'+cfg.personas.map((p,i)=>'<button class="'+(yo===p?'on':'')+'" onclick="setYo('+i+')">'+esc(p)+'</button>').join('')+'</div><p class="muted small">Los apuntes se marcan con este nombre.</p><details><summary class="small">Cambiar los nombres</summary><div class="row2">'+cfg.personas.map((p,i)=>'<input value="'+esc(p)+'" aria-label="Nombre '+(i+1)+'" onchange="renombrarPersona('+i+',this.value)">').join('')+'</div></details></section>'
   +'<section class="card"><h2>💼 Nóminas</h2><p class="muted small" style="margin-top:-4px">Las nóminas que entran a partir de este día cuentan para el mes siguiente (con ellas vivís el mes que empieza). Pon 0 para desactivarlo.</p><label>A partir del día<input type="number" min="0" max="31" inputmode="numeric" value="'+(Number((cfg.nominaSig||{}).dia)||0)+'" onchange="cfg.nominaSig={dia:Math.max(0,Math.min(31,parseInt(this.value)||0))};saveCfg();render()"></label></section>'
-  +'<section class="card"><h2>📅 Mes contable</h2><p class="muted small" style="margin-top:-4px">El mes empieza este día del mes anterior y acaba el día antes. Con 29: noviembre va del 29 de octubre al 28 de noviembre. Pon 0 para usar meses naturales (del 1 al 31).</p><label>Empieza el día<input type="number" min="0" max="29" inputmode="numeric" value="'+(diaCierre())+'" onchange="var v=parseInt(this.value)||0;cfg.cierre={dia:(v>=2&&v<=29)?v:0};saveCfg();vm=mesContHoy();render()"></label></section>'
+  +'<section class="card"><h2>📅 Mes contable</h2><p class="muted small" style="margin-top:-4px">Elige el día en que empieza tu mes, según cuándo cobras o cuándo cierras cuentas. El mes acaba el día antes de ese día del mes siguiente. Con 5, el mes va del 5 al 4. Con 31 empieza el último día de cada mes. Pon 0 para usar meses naturales (del 1 al 31).</p><label>Empieza el día (0 = mes natural, de 1 a 31)<input type="number" min="0" max="31" inputmode="numeric" value="'+(diaCierre())+'" onchange="var v=parseInt(this.value)||0;cfg.cierre={dia:(v>=2&&v<=31)?v:0};saveCfg();vm=mesContHoy();render()"></label>'+(function(){var mc=mesContHoy(),p=periodo(mc.y,mc.m);return '<p class="small" style="margin:8px 0 0"><b>Este mes ('+MESES[mc.m].toLowerCase()+'):</b> del '+fechaCorta(p.ini)+' al '+fechaCorta(p.fin)+' ('+p.dias+' días)</p>'})()+'</section>'
   +seccionCuentas()
 
   +'<section class="card"><h2>☁️ Copia en la nube (Google)</h2><p class="small muted" style="margin-top:-4px">Estado: '+(sync.url?(sync.error?'<b style="color:var(--neg)">error: '+esc(sync.error)+'</b>':'conectado · última vez '+ultima):'sin conectar · los datos solo están en este móvil')+'</p>'
