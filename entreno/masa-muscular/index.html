@@ -74,7 +74,7 @@ details.card summary{cursor:pointer;font-weight:700}
 .gmid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px 20px;gap:6px;min-height:0;overflow:auto}
 .gphase{font-size:clamp(15px,2.2vw,24px);font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--mu)}
 .gname{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-weight:800;font-size:clamp(34px,6.5vw,92px);line-height:1.02;text-transform:uppercase}
-.gtimer{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-weight:800;font-size:clamp(120px,31vh,400px);line-height:.95;font-variant-numeric:tabular-nums}
+.gtimer{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-weight:800;font-size:clamp(90px,min(31vh,34vw),400px);line-height:.95;font-variant-numeric:tabular-nums}
 .gtimer.low{color:#ffd23d}
 .gtimer.pulse{animation:p .5s infinite alternate}
 @keyframes p{to{transform:scale(1.05)}}
@@ -100,7 +100,7 @@ textarea,input,select{background:var(--card2);border:1px solid var(--line);color
 textarea{width:100%;height:110px;font:12px monospace}
 label{display:block;font-size:13px;color:var(--mu);margin:12px 0 4px;font-weight:600}
 @media (max-width:600px){body{padding:14px 12px 70px}.top h1{font-size:26px}}
-</style>
+.vl{background:var(--c2);color:#0d1015;border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:700;text-decoration:none;white-space:nowrap;align-self:center}</style>
 </head>
 <body>
 <div class="wrap" id="app"></div>
@@ -212,10 +212,11 @@ function render(){
   ${prevS?`<button class="btn ghost" onclick="go(${prevS[0]},${prevS[1]})">← Anterior</button>`:''}${nxtS?`<button class="btn ghost" onclick="go(${nxtS[0]},${nxtS[1]})">Siguiente →</button>`:''}</div>`+
   bl.map((b,k)=>`<div class="block"><div class="bh"><h3>${k+1}. ${esc(b.title)}</h3>${b.lv?`<span class="chip lv">${LVTXT[b.lv]}</span>`:''}<span style="flex:1"></span><button class="btn ghost small" onclick="startG(${W.n},${S.n},${k})">▶ Empezar aquí</button></div>
   ${b.obs&&b.k!=='wu'?`<div class="obs">${esc(b.obs)}</div>`:''}${b.expl?`<details class="obs"><summary style="cursor:pointer;font-weight:700">Explicación ampliada</summary><div style="margin-top:8px">${esc(typeof b.expl==='string'?b.expl:(b.expl['n'+LV()]||''))}</div></details>`:''}
-  ${blockLines(b).map(l=>`<div class="ln"><span class="nm" ${exId(l[0])?`onclick="exModal('${esc(l[0]).replace(/'/g,'&#39;')}')"`:''}>${esc(l[0])}</span><span class="qt">${esc(l[1])}</span></div>`).join('')}</div>`).join('');
+  ${blockLines(b).map(l=>`<div class="ln"><span class="nm" ${exId(l[0])?`onclick="exModal('${esc(l[0]).replace(/'/g,'&#39;')}')"`:''}>${esc(l[0])}</span>${vlink(l[0])}<span class="qt">${esc(l[1])}</span></div>`).join('')}</div>`).join('');
 }
 function go(w,s){view={w,s};render();window.scrollTo(0,0)}
 function toggleDone(w,s){setDone(w,s,!isDone(w,s));render()}
+function vlink(n){const id=exId(n),e=id&&D.lib[id];return (e&&e.v)?`<a class="vl" href="${esc(e.v)}" target="_blank" rel="noopener">▶ Vídeo</a>`:''}
 /* modals */
 function showM(h){$('#mb').innerHTML=h;$('#m').classList.add('on')}
 function closeM(){$('#m').classList.remove('on');if(G&&G.pm){G.pm=false;if(G.paused)togglePause()}}
@@ -303,6 +304,7 @@ function drawG(){
   else if(st.k==='cardio'){phase='Aeróbico suave';name=st.name;main=`<div class="gtimer" id="gt">${fmt(G.left)}</div>`;sub=st.tag}
   else if(st.t>0){phase='Trabajo';name=st.name;main=`<div class="gtimer" id="gt">${fmt(G.left)}</div>`;sub=[st.qty,st.tag,st.note].filter(Boolean).join('\n')}
   else{phase=st.tag||'Repeticiones';name=st.name;main=`<div class="gtimer" style="font-size:clamp(90px,24vh,300px)">${esc(st.qty||'✓')}</div>`;sub=st.note||''}
+  const vn=st.k==='rest'?(st.nx||(nextWork(G.i)||{}).name):st.name,vi=(st.k!=='intro'&&vn)?exId(vn):null,vl=vi&&D.lib[vi]&&D.lib[vi].v;const vidBtn=vl?`<a class="btn" style="text-decoration:none;background:var(--c2)" href="${esc(vl)}" target="_blank" rel="noopener">▶ Ver vídeo</a>`:'';
   const tipBtn=(st.k!=='rest'&&st.k!=='intro'&&exId(st.name))?`<button class="btn ghost" onclick="exModal('${esc(st.name).replace(/'/g,'&#39;')}')">Técnica</button>`:'';
   const manual=!(st.t>0);
   g.innerHTML=`<div class="gbar"><i style="width:${Math.max(0,G.i/n*100)}%"></i></div>
@@ -310,7 +312,7 @@ function drawG(){
   <button class="btn ghost small" onclick="G.sound=!G.sound;drawG()">${G.sound?'🔊':'🔇'}</button><button class="btn ghost small" onclick="descModal()">Instrucciones</button><button class="btn ghost small" onclick="skipBlock()">Saltar bloque</button></div>
   <div class="gmid"><div class="gphase">${esc(phase)}</div>${st.k==='intro'?`<div class="gname">${esc(name)}</div>`:`<div class="gname">${esc(cap1(name))}</div>`}${main}${sub&&st.k!=='intro'?`<div class="gsub">${esc(sub)}</div>`:''}</div>
   <div class="gnext">${nxt}</div>
-  <div class="gctl"><button class="btn ghost" onclick="prev()">← Atrás</button>${manual?'':`<button class="btn ghost" onclick="togglePause()">${G.paused?'▶ Seguir':'❚❚ Pausa'}</button>`}${tipBtn}
+  <div class="gctl"><button class="btn ghost" onclick="prev()">← Atrás</button>${manual?'':`<button class="btn ghost" onclick="togglePause()">${G.paused?'▶ Seguir':'❚❚ Pausa'}</button>`}${vidBtn}${tipBtn}
   ${st.k==='intro'?`<button class="btn gdone" onclick="next()">▶ Empezar bloque</button>`:manual?`<button class="btn gdone" onclick="next()">${st.btn||'✓ HECHO'}</button>`:`<button class="btn" onclick="next()">Saltar →</button>`}</div>`}
 function descModal(){const b=G.bl[G.steps[G.i].bi];if(!G.paused&&G.steps[G.i].t>0){G.pm=true;togglePause()}
   showM(`<h2>${esc(b.title)}</h2><div class="tx">${esc(b.obs||'')}${b.expl?'\n\n'+esc(typeof b.expl==='string'?b.expl:(b.expl['n'+LV()]||'')):''}</div><div class="row"><button class="btn" onclick="closeM()">Cerrar</button></div>`)}

@@ -55,6 +55,7 @@ a{color:inherit}
 .erow:first-of-type{border-top:0}
 .erow .nm{flex:1;min-width:150px;font-weight:600;cursor:pointer}
 .erow .nm:hover{color:var(--c)}
+.vl{background:#ffb43d;color:#0d1015;border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:700;text-decoration:none;white-space:nowrap}
 .erow .qt{font-family:'Barlow Condensed','Arial Narrow',Inter,system-ui,sans-serif;font-size:22px;font-weight:700;color:var(--c)}
 .erow.r .nm{color:var(--mu);font-weight:500;cursor:default}
 .erow.r .qt{color:var(--rest)}
@@ -75,7 +76,7 @@ a{color:inherit}
 .gmid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:10px 20px;gap:6px;min-height:0}
 .gphase{font-size:clamp(16px,2.4vw,26px);font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--mu)}
 .gname{font-family:'Barlow Condensed','Arial Narrow',Inter,system-ui,sans-serif;font-weight:800;font-size:clamp(38px,7.5vw,104px);line-height:1;text-transform:uppercase}
-.gtimer{font-family:'Barlow Condensed','Arial Narrow',Inter,system-ui,sans-serif;font-weight:800;font-size:clamp(130px,33vh,420px);line-height:.95;font-variant-numeric:tabular-nums}
+.gtimer{font-family:'Barlow Condensed','Arial Narrow',Inter,system-ui,sans-serif;font-weight:800;font-size:clamp(90px,min(33vh,34vw),420px);line-height:.95;font-variant-numeric:tabular-nums}
 .gtimer.low{color:#ffd23d}
 .gtimer.pulse{animation:p .5s infinite alternate}
 @keyframes p{to{transform:scale(1.05)}}
@@ -168,7 +169,7 @@ function sesTitle(s){
   return u.slice(0,2).join(' · ')||('Sesión '+s.n);
 }
 function qtxt(t,r){return t>0&&r>0?r+' reps · '+t+' s':t>0?(t>=60&&t%60==0?(t/60)+' min':t+' s'):'× '+r}
-function rowH(ex,q){const isR=ex===REST;return `<div class="erow ${isR?'r':''}"><span class="nm" ${isR?'':`onclick="exModal(${ex})"`}>${isR?'Descanso':esc(exName(ex))}</span><span class="qt">${q}</span></div>`}
+function rowH(ex,q){const isR=ex===REST;return `<div class="erow ${isR?'r':''}"><span class="nm" ${isR?'':`onclick="exModal(${ex})"`}>${isR?'Descanso':esc(exName(ex))}</span>${(!isR&&EX[ex]&&EX[ex].v)?`<a class="vl" href="${esc(EX[ex].v)}" target="_blank" rel="noopener" title="Ver vídeo">▶ Vídeo</a>`:''}<span class="qt">${q}</span></div>`}
 function blockHTML(P,S,b,bi){
   const sets={};b.s.forEach(st=>{(sets[st[3]]=sets[st[3]]||[]).push(st)});
   const keys=Object.keys(sets).map(Number).sort((a,b)=>a-b);
@@ -314,6 +315,8 @@ function drawG(){
   else if(isTime){phase='Trabajo';name=exName(st.ex);main=`<div class="gtimer" id="gt">${fmt(Math.ceil(G.left))}</div>`;if(st.r>0)sub='× '+st.r+' repeticiones'}
   else{phase='Repeticiones';name=exName(st.ex);main=`<div class="gtimer">× ${st.r||'—'}</div>`;sub='Pulsa HECHO cuando termines (barra espaciadora)'}
   const stepNo=G.steps.slice(0,G.i+1).filter(s=>!s.ready).length,total=G.steps.filter(s=>!s.ready).length;
+  let vex=st.ex;if(isRest){const nx=G.steps.slice(G.i+1).find(s=>s.ex&&s.ex!==REST&&!s.ready);vex=nx&&nx.ex}
+  const vidBtn=(vex&&EX[vex]&&EX[vex].v)?`<a class="btn" style="text-decoration:none;background:#ffb43d" href="${esc(EX[vex].v)}" target="_blank" rel="noopener">▶ Ver vídeo</a>`:'';
   const tipBtn=(!isRest&&EX[st.ex])?`<button class="btn ghost" onclick="exModal(${st.ex})">Técnica / vídeo</button>`:'';
   g.innerHTML=`<div class="gbar"><i style="width:${Math.max(0,(G.i)/n*100)}%"></i></div>
   <div class="gtop"><button class="btn ghost small" onclick="exitG()">✕ Salir</button>
@@ -324,7 +327,7 @@ function drawG(){
   <div class="gnext">${nxt}</div>
   <div class="gctl"><button class="btn ghost" onclick="prev()">← Atrás</button>
   <button class="btn ghost" onclick="togglePause()">${G.paused?'▶ Seguir':'❚❚ Pausa'}</button>
-  ${tipBtn}
+  ${vidBtn}${tipBtn}
   ${isReps?`<button class="btn gdone" onclick="next()">✓ HECHO</button>`:`<button class="btn" onclick="next()">Saltar →</button>`}</div>`;
 }
 function descModal(){
