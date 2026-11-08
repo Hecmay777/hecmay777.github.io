@@ -155,7 +155,7 @@ function render(){
   const S=P.ses.find(x=>x.n===view.s);
   const idx=P.ses.indexOf(S);
   let tot=0;S.b.forEach(b=>b.s.forEach(st=>{tot+=st[1]}));
-  a.innerHTML=`<div class="top"><button class="back" onclick="go('${P.id}',null)">← ${esc(P.name)}</button><h1>Sesión ${esc(S.n)}</h1></div>
+  a.innerHTML=`<div class="top"><button class="back" onclick="go('${P.id}',null)">← ${esc(P.name)}</button><button class="back" onclick="go(null,null)">🏠 Menú principal</button><h1>Sesión ${esc(S.n)}</h1></div>
   <div class="sub" style="margin:-12px 0 12px">${esc(sesTitle(S))} · ${S.b.length} bloque${S.b.length>1?'s':''}${isDone(P.id,S.n)?' · ✓ hecha':''}</div>
   <div class="bigplay"><button class="btn" onclick="startG('${P.id}','${S.n}',0)">▶ Empezar sesión guiada</button>
   <button class="btn ghost" onclick="toggleDone('${P.id}','${S.n}')">${isDone(P.id,S.n)?'Desmarcar como hecha':'Marcar como hecha'}</button>
@@ -280,7 +280,7 @@ function togglePause(){
 function exitG(force){
   if(!force&&G.mode!=='sum'){
     if(!G.paused&&G.steps[G.i].t>0)togglePause();
-    showM(`<h2>¿Salir de la sesión?</h2><div class="tx">Se perderá el avance de esta sesión guiada.</div><div class="row"><button class="btn" onclick="closeM();exitG(true)">Salir</button><button class="btn ghost" onclick="closeM()">Seguir entrenando</button></div>`);
+    showM(`<h2>¿Salir de la sesión?</h2><div class="tx">Se perderá el avance de esta sesión guiada.</div><div class="row"><button class="btn" onclick="closeM();exitG(true)">Salir a la sesión</button><button class="btn ghost" onclick="closeM();exitG(true);go(null,null)">🏠 Menú principal</button><button class="btn ghost" onclick="closeM()">Seguir entrenando</button></div>`);
     return;
   }
   clearInterval(TM);try{G.wl&&G.wl.release()}catch(e){}
@@ -292,7 +292,7 @@ function finish(){
   const P=G.P,S=G.S,idx=P.ses.indexOf(S),nx=P.ses[idx+1];
   const g=$('#g');g.className='on ready';
   g.innerHTML=`<div class="gmid"><div class="sum"><div class="gphase">${esc(P.name)} · Sesión ${esc(S.n)}</div><h2 class="big">¡Sesión completada!</h2><div class="gsub" style="margin:10px 0 24px">Tiempo total: <b>${fmtLong(el)}</b></div>
-  <div class="row" style="justify-content:center"><button class="btn gdone" onclick="exitG(true)">Terminar</button>${nx?`<button class="btn ghost" onclick="const p='${P.id}',n='${nx.n}';exitG(true);go(p,n)">Ir a la sesión ${esc(nx.n)}</button>`:''}</div></div></div>`;
+  <div class="row" style="justify-content:center"><button class="btn gdone" onclick="exitG(true)">Terminar</button><button class="btn ghost" onclick="exitG(true);go(null,null)">🏠 Menú principal</button>${nx?`<button class="btn ghost" onclick="const p='${P.id}',n='${nx.n}';exitG(true);go(p,n)">Ir a la sesión ${esc(nx.n)}</button>`:''}</div></div></div>`;
 }
 function nextWork(i){for(let j=i+1;j<G.steps.length;j++)if(G.steps[j].ex!==REST)return G.steps[j];return null}
 function drawG(){

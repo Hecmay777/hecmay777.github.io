@@ -204,7 +204,7 @@ function render(){
   const bl=visBlocks(S),vs=S.vid.all||(LV()===1?S.vid.n1:S.vid.n23)||S.vid.n1||S.vid.n23;
   const prevS=i>0?[W.n,W.ses[i-1].n]:(W.n>1?[W.n-1,D.weeks[W.n-2].ses.slice(-1)[0].n]:null);
   const nxtS=i<W.ses.length-1?[W.n,W.ses[i+1].n]:(W.n<12?[W.n+1,D.weeks[W.n].ses[0].n]:null);
-  a.innerHTML=`<div class="top"><button class="back" onclick="go(null,null)">← Semanas</button><h1>Semana ${W.n} · Sesión ${S.n}</h1></div>
+  a.innerHTML=`<div class="top"><button class="back" onclick="go(null,null)">🏠 Menú principal</button><h1>Semana ${W.n} · Sesión ${S.n}</h1></div>
   <div class="sub" style="margin:-10px 0 12px">${esc(sesTitle(S))} · Nivel ${LV()}${isDone(W.n,S.n)?' · ✓ hecha':''}</div>
   <div class="bigplay"><button class="btn" onclick="startG(${W.n},${S.n},0)">▶ Empezar sesión guiada</button>
   <button class="btn ghost" onclick="toggleDone(${W.n},${S.n})">${isDone(W.n,S.n)?'Desmarcar como hecha':'Marcar como hecha'}</button>
@@ -283,12 +283,12 @@ function prev(){if(G.i>0)enter(G.i-1)}
 function skipBlock(){const bi=G.steps[G.i].bi;let j=G.i;while(j<G.steps.length&&G.steps[j].bi===bi)j++;G.cap=null;enter(j)}
 function togglePause(){if(!G||G.mode!=='run')return;G.paused=!G.paused;G.last=performance.now();drawG()}
 function exitG(force){
-  if(!force&&G.mode==='run'){if(!G.paused)togglePause();showM(`<h2>¿Salir de la sesión?</h2><div class="tx">Se perderá el avance de esta sesión guiada.</div><div class="row"><button class="btn" onclick="closeM();exitG(true)">Salir</button><button class="btn ghost" onclick="closeM();if(G&&G.paused)togglePause()">Seguir entrenando</button></div>`);return}
+  if(!force&&G.mode==='run'){if(!G.paused)togglePause();showM(`<h2>¿Salir de la sesión?</h2><div class="tx">Se perderá el avance de esta sesión guiada.</div><div class="row"><button class="btn" onclick="closeM();exitG(true)">Salir a la sesión</button><button class="btn ghost" onclick="closeM();exitG(true);go(null,null)">🏠 Menú principal</button><button class="btn ghost" onclick="closeM();if(G&&G.paused)togglePause()">Seguir entrenando</button></div>`);return}
   clearInterval(TM);try{G.wl&&G.wl.release()}catch(e){}G=null;$('#g').classList.remove('on');document.body.style.overflow='';render()}
 function finish(){
   G.mode='sum';setDone(G.W.n,G.S.n,true);beep(1175,.5);
   const W=G.W,S=G.S,i=W.ses.indexOf(S),n=i<W.ses.length-1?[W.n,W.ses[i+1].n]:(W.n<12?[W.n+1,D.weeks[W.n].ses[0].n]:null);
-  const g=$('#g');g.className='on cardio';g.innerHTML=`<div class="gmid"><div class="sum"><div class="gphase">Semana ${W.n} · Sesión ${S.n}</div><h2 class="big">¡Sesión completada!</h2><div class="gsub" style="margin:10px 0 24px;text-align:center">Tiempo total: <b>${fmtL((Date.now()-G.t0)/1000)}</b></div><div class="row" style="justify-content:center"><button class="btn gdone" onclick="exitG(true)">Terminar</button>${n?`<button class="btn ghost" onclick="const a=${n[0]},b=${n[1]};exitG(true);go(a,b)">Ir a la sesión ${n[1]}</button>`:''}</div></div></div>`}
+  const g=$('#g');g.className='on cardio';g.innerHTML=`<div class="gmid"><div class="sum"><div class="gphase">Semana ${W.n} · Sesión ${S.n}</div><h2 class="big">¡Sesión completada!</h2><div class="gsub" style="margin:10px 0 24px;text-align:center">Tiempo total: <b>${fmtL((Date.now()-G.t0)/1000)}</b></div><div class="row" style="justify-content:center"><button class="btn gdone" onclick="exitG(true)">Terminar</button><button class="btn ghost" onclick="exitG(true);go(null,null)">🏠 Menú principal</button>${n?`<button class="btn ghost" onclick="const a=${n[0]},b=${n[1]};exitG(true);go(a,b)">Ir a la sesión ${n[1]}</button>`:''}</div></div></div>`}
 function nextWork(i){for(let j=i+1;j<G.steps.length;j++){const s=G.steps[j];if(s.k!=='rest'&&s.k!=='intro')return s}return null}
 const KL={dom:'Dominadas al minuto',emom:'Por minutos',tab:'Tábata',sets:'Series',lad:'Escalera',hard:'Hardstop',cardio:'Aeróbico',task:'Tarea',wu:'Calentamiento'};
 function drawG(){
