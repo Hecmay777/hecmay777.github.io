@@ -343,6 +343,18 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='Escape'){exitG()}
 });
 render();
+/* botón atrás del móvil */
+(function(){
+ const cur=()=>JSON.stringify(view),base=go;
+ try{history.replaceState({v:cur()},'')}catch(e){}
+ window.go=go=function(a,b){base(a,b);try{history.pushState({v:cur()},'')}catch(e){}};
+ window.addEventListener('popstate',e=>{
+  const m=document.getElementById('m');
+  if(m&&m.classList.contains('on')){closeM();try{history.pushState({v:cur()},'')}catch(x){}return}
+  if(typeof G!=='undefined'&&G){try{history.pushState({v:cur()},'')}catch(x){}if(G.mode==='sum')exitG(true);else exitG();return}
+  let v=null;try{v=JSON.parse(e.state&&e.state.v)}catch(x){}
+  view=v||(('p' in view)?{p:null,s:null}:{w:null,s:null});render();window.scrollTo(0,0)});
+})();
 </script>
 <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script></body>
 </html>

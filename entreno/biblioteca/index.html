@@ -83,9 +83,12 @@ function listView(keepFocus){
  const q=$('#q');q.addEventListener('input',()=>{F.q=q.value;F.n=60;const p=q.selectionStart;listView();const q2=$('#q');q2.focus();q2.setSelectionRange(p,p)});
  $('#fm').onchange=e=>{F.m=e.target.value;F.n=60;listView()};$('#fj').onchange=e=>{F.j=e.target.value;F.n=60;listView()};$('#fp').onchange=e=>{F.prog=e.target.value;F.n=60;listView()};
  CUR=null}
-function openEx(id,fresh){if(fresh)STACK=[];else if(CUR)STACK.push(CUR);CUR=id;detView(id);window.scrollTo(0,0)}
-function back(){if(STACK.length){CUR=STACK.pop();detView(CUR)}else{listView();}}
-function filtBy(k,v){F={q:'',m:'',j:'',fav:false,prog:'',n:60};F[k]=v;STACK=[];listView();window.scrollTo(0,0)}
+function pushH(){try{history.pushState({c:CUR,s:STACK.slice()},'')}catch(e){}}
+function openEx(id,fresh){if(fresh)STACK=[];else if(CUR)STACK.push(CUR);CUR=id;detView(id);window.scrollTo(0,0);pushH()}
+function back(){if(history.state&&history.state.c){history.back()}else{STACK=[];listView()}}
+window.addEventListener('popstate',e=>{const st=e.state;if(st&&st.c){CUR=st.c;STACK=st.s||[];detView(CUR)}else{STACK=[];listView()}window.scrollTo(0,0)});
+try{history.replaceState({c:null,s:[]},'')}catch(e){}
+function filtBy(k,v){F={q:'',m:'',j:'',fav:false,prog:'',n:60};F[k]=v;STACK=[];CUR=null;listView();window.scrollTo(0,0);pushH()}
 function detView(id){const e=BY[id],a=$('#app');
  let an=typeof animFor==='function'?animFor(e.n):null;if(an){const n=nz(e.n);if(!ANIM[an].k.some(k=>n===k||n===k+'s'||n===k+'es'||n===k.replace(/a$/,'as')))an=null}
  const sim=LIB.filter(x=>x.i!==e.i&&x.m[0]&&x.m[0]===e.m[0]&&x.j.join()===e.j.join()).slice(0,6);
