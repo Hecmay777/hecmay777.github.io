@@ -407,7 +407,20 @@ function finBienvenida(a){
   else{vista='apuntar';render();toast('¡Listo! Ya puedes apuntar tu primer gasto')}
 }
 let volver=null; // pantalla de la que venimos al abrir una categoría (para poder volver)
-function ir(v){modoOrden=false;if(vista==='apuntar'&&$('#fImp'))leerForm();if(v!=='movs'){volver=null;movAno=false}vista=v;render();window.scrollTo(0,0)}
+/* Historial: el botón «atrás» del móvil o del navegador vuelve a la pantalla anterior de la app y nunca la cierra */
+let navHist=false;
+const estadoNav=()=>({vista,vm:{y:vm.y,m:vm.m},modo:modoRes,fc:filtroCat,ma:movAno,vol:volver});
+function guardarHist(){if(navHist)return;try{const st=estadoNav();if(JSON.stringify(st)===JSON.stringify(history.state))return;history.pushState(st,'')}catch(e){}}
+function ir(v){modoOrden=false;if(vista==='apuntar'&&$('#fImp'))leerForm();if(v!=='movs'){volver=null;movAno=false}vista=v;render();window.scrollTo(0,0);guardarHist()}
+window.addEventListener('popstate',e=>{
+  const st=e.state;
+  if(!st||st.root){try{history.pushState(estadoNav(),'')}catch(x){}return}
+  if(bienv)return;
+  if(vista==='apuntar'&&$('#fImp'))leerForm();
+  navHist=true;
+  try{modoOrden=false;vista=st.vista;vm={y:st.vm.y,m:st.vm.m};modoRes=st.modo;filtroCat=st.fc||'';filtroTxt='';movAno=!!st.ma;volver=st.vol||null;render();window.scrollTo(0,0)}finally{navHist=false}
+});
+try{history.replaceState({root:1},'');history.pushState(estadoNav(),'')}catch(e){}
 function verSinClas(){if(vista!=='movs')volver={vista,y:vm.y,m:vm.m,modo:modoRes};const l=movs.filter(m=>!m.borrado&&m.categoria==='sin_clasificar').map(m=>mesCont(m)).sort();const u=(l[l.length-1]||'').split('-');if(u.length===2)vm={y:+u[0],m:+u[1]-1};verCat('sin_clasificar')}
 function verCatAno(id){if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};movAno=true;filtroCat=id;filtroTxt='';ir('movs')}
 function verCat(id){movAno=false;if(vista!=='movs'&&!volver)volver={vista,y:vm.y,m:vm.m,modo:modoRes};filtroCat=id;filtroTxt='';ir('movs')}
