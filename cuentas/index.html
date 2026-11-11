@@ -985,10 +985,22 @@ function borrar(id){updMov(id,{borrado:true});cerrar();render(true);toast('Movid
 
 /* ===================== MOVIMIENTOS ===================== */
 /* Filtro por categoría. Valores especiales: @ing = todos los ingresos, @gas = todos los gastos, @neu = traspasos entre cuentas */
-function coincideCat(m,f){if(!f)return true;if(f.indexOf('@resto:')===0)return f.slice(7).split(',').indexOf(m.categoria)>=0&&m.tipo==='gasto';const g=catById(m.categoria).grupo;if(f==='@ing')return g==='ingreso';if(f==='@gas')return g==='variable'||g==='fijo';if(f==='@neu')return g==='neutro';return m.categoria===f}
+/* Movimientos detrás de cada línea de «Lo que os queda» (filtro especial @lq:...) */
+const LQ_NOM={sincobrar:'Recibos ya apuntados que el banco aún no cobró',fijos:'Recibos fijos ya apuntados que faltan por cobrar',amazon:'Pedidos de Amazon pendientes de cobro',delahorro:'Sacado del ahorro este mes',yaahorro:'Ya pasado a ahorro este mes'};
+function lqMovs(k){
+  const mc=mesContHoy(),pe=periodo(mc.y,mc.m),h0=hoy();
+  const incl=cuentasVis().filter(c=>(c.tipo==='dia'||c.tipo==='personal')&&saldoCuenta(c)!==null),ids=new Set(incl.map(c=>c.id));
+  if(k==='sincobrar')return incl.flatMap(c=>movsContados(c).filter(m=>m.origen==='fijo'&&!m.importKey));
+  if(k==='fijos'){const refF=id=>(incl.find(c=>c.id===id)||{}).fecha||'';return movs.filter(x=>!x.borrado&&ids.has(cuentaDe(x))&&x.tipo==='gasto'&&!(x.categoria&&catById(x.categoria).grupo==='neutro')&&x.fecha>=pe.ini&&x.fecha<=pe.fin&&x.fecha>h0&&x.fecha>refF(cuentaDe(x)))}
+  if(k==='amazon')return movs.filter(x=>pendAmazon(x)&&ids.has(cuentaDe(x)));
+  if(k==='delahorro'){const ah=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));return movs.filter(x=>!x.borrado&&ah.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin)}
+  if(k==='yaahorro')return movs.filter(x=>!x.borrado&&ids.has(cuentaDe(x))&&(x.categoria==='hucha'||x.categoria==='inversion')&&x.fecha>=pe.ini&&x.fecha<=pe.fin&&x.fecha<=h0);
+  return [];
+}
+function coincideCat(m,f){if(!f)return true;if(f.indexOf('@lq:')===0){const k=f.slice(4);return lqMovs(k).some(x=>x.id===m.id)}if(f.indexOf('@resto:')===0)return f.slice(7).split(',').indexOf(m.categoria)>=0&&m.tipo==='gasto';const g=catById(m.categoria).grupo;if(f==='@ing')return g==='ingreso';if(f==='@gas')return g==='variable'||g==='fijo';if(f==='@neu')return g==='neutro';return m.categoria===f}
 function listaHTML(){
   const q=norm(filtroTxt);
-  const list=(movAno?deAno(vm.y):deMes(vm.y,vm.m)).filter(m=>coincideCat(m,filtroCat)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
+  const list=(filtroCat.indexOf('@lq:')===0?movs.filter(x=>!x.borrado):movAno?deAno(vm.y):deMes(vm.y,vm.m)).filter(m=>coincideCat(m,filtroCat)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
     .sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.creado-a.creado);
   if(!list.length)return '<p class="muted small">No hay movimientos.</p>';
   let out='',dia='';
@@ -1021,7 +1033,7 @@ function vMovs(){
   let t=calc(movAno?deAno(vm.y):deMes(vm.y,vm.m));if(!movAno)t=conPrevisto(t,vm.y,vm.m);
   return (volver?'<button class="btn ghost sm" style="margin-bottom:10px" onclick="volverDeCat()">← Volver a '+({resumen:'Resumen',consejos:'Consejos'}[volver.vista]||'la pantalla anterior')+'</button>':'')+monthNav()
    +'<div class="kpis"><div class="kpi" role="button" tabindex="0" style="cursor:pointer;'+(filtroCat==='@ing'?'outline:2px solid var(--brand)':'')+'" onclick="filtroCat=filtroCat===\'@ing\'?\'\':\'@ing\';filtroTxt=\'\';render()" aria-label="Ver solo los ingresos"><small>Ingresos ›</small><b class="pos">'+eur(t.ingreso)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer;'+(filtroCat==='@gas'?'outline:2px solid var(--brand)':'')+'" onclick="filtroCat=filtroCat===\'@gas\'?\'\':\'@gas\';filtroTxt=\'\';render()" aria-label="Ver solo los gastos"><small>Gastos ›</small><b>'+eur(t.gastos)+'</b></div><div class="kpi" role="button" tabindex="0" style="cursor:pointer" onclick="verAhorro()" aria-label="Ver cómo sale el ahorro"><small>Ahorro ›</small><b class="'+(t.ahorro>=0?'pos':'neg')+'">'+eur(t.ahorro)+'</b>'+(t.prev?'<small style="font-size:11.5px">ahora '+eur0(t.prev.ahora)+'</small>':'')+'</div></div>'
-   +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option><option value="@ing"'+(filtroCat==='@ing'?' selected':'')+'>💰 Todos los ingresos</option><option value="@gas"'+(filtroCat==='@gas'?' selected':'')+'>🧾 Todos los gastos</option><option value="@neu"'+(filtroCat==='@neu'?' selected':'')+'>🔁 Traspasos entre cuentas</option>'+(filtroCat.indexOf('@resto:')===0?'<option value="'+filtroCat+'" selected>📦 Resto de categorías</option>':'')+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
+   +'<section class="card"><div class="row2" style="margin-top:-10px"><label>Buscar<input value="'+esc(filtroTxt)+'" placeholder="Mercadona, gasolina…" oninput="filtroTxt=this.value;$(\'#lista\').innerHTML=listaHTML()"></label><label>Categoría<select onchange="filtroCat=this.value;$(\'#lista\').innerHTML=listaHTML()"><option value="">Todas</option><option value="@ing"'+(filtroCat==='@ing'?' selected':'')+'>💰 Todos los ingresos</option><option value="@gas"'+(filtroCat==='@gas'?' selected':'')+'>🧾 Todos los gastos</option><option value="@neu"'+(filtroCat==='@neu'?' selected':'')+'>🔁 Traspasos entre cuentas</option>'+(filtroCat.indexOf('@resto:')===0?'<option value="'+filtroCat+'" selected>📦 Resto de categorías</option>':'')+(filtroCat.indexOf('@lq:')===0?'<option value="'+filtroCat+'" selected>🔎 '+esc(LQ_NOM[filtroCat.slice(4)]||'Lo que os queda')+'</option>':'')+catOptions(filtroCat)+'</select></label></div><div id="lista">'+listaHTML()+'</div></section>';
 }
 
 /* ===================== RESUMEN ===================== */
@@ -1194,24 +1206,25 @@ function tarjetaSaldo(compacta){
   const cab='<div style="display:flex;align-items:center;gap:14px">'+ring+'<div style="min-width:0;flex:1"><div style="font-weight:600;color:'+col+'">'+aviso+'</div><div class="small muted" style="margin-top:4px">'+(q.queda<0?'Faltan '+eur(-q.queda)+' para los recibos.':dep?'Sin los '+eur(q.delAhorro)+' del ahorro os faltarían '+eur(-q.propio)+'.':'Quedan '+q.dias+' día'+(q.dias>1?'s':'')+' de mes.')+'</div></div></div>';
   if(compacta)return '<section class="card anillo" role="button" aria-label="Ver el detalle de lo que queda" onclick="modoRes=\'mes\';vm=mesContHoy();ir(\'resumen\')">'+ring+'</section>';
   const tr=cuentasVis().find(c=>c.tipo==='ahorro'&&saldoCuenta(c)!==null),st=saldoCuenta(tr);
-  const linea=(a,b,extra)=>'<div class="bhead" style="padding:4px 0"><span>'+a+'</span><span'+(extra||'')+'>'+b+'</span></div>';
+  const linea=(a,b,extra,f)=>f?'<div class="bhead" role="button" tabindex="0" style="padding:4px 0;cursor:pointer" onclick="verCat(\''+f+'\')" aria-label="Ver los movimientos de esta línea"><span>'+a+' <small class="muted">›</small></span><span'+(extra||'')+'>'+b+'</span></div>':'<div class="bhead" style="padding:4px 0"><span>'+a+'</span><span'+(extra||'')+'>'+b+'</span></div>';
+  const nFij=lqMovs('fijos').length;
   return '<section class="card"><h2>💶 Lo que os queda este mes</h2>'+cab+'<div style="height:10px"></div>'
    +q.partes.map(x=>linea('Saldo de '+esc(x.nombre)+' en el banco',eur(x.banco))).join('')
    +(q.partes.length>1?linea('<b>Total en el banco</b>','<b>'+eur(r2(q.partes.reduce((a,x)=>a+x.banco,0)))+'</b>'):'')
-   +(q.sinCobrar>0.005?linea('Recibos ya apuntados que el banco aún no cobró','− '+eur(q.sinCobrar)):'')
-   +linea('Recibos fijos que faltan por cobrar','− '+eur(q.fijos))
-   +(q.pendA>0?linea('Pedidos de Amazon pendientes de cobro','− '+eur(q.pendA)):'')
+   +(q.sinCobrar>0.005?linea('Recibos ya apuntados que el banco aún no cobró','− '+eur(q.sinCobrar),'','@lq:sincobrar'):'')
+   +linea('Recibos fijos que faltan por cobrar','− '+eur(q.fijos),'',nFij?'@lq:fijos':'')
+   +(q.pendA>0?linea('Pedidos de Amazon pendientes de cobro','− '+eur(q.pendA),'','@lq:amazon'):'')
    +(q.habit>0?linea('Gastos habituales que aún no han llegado (estimado)','− '+eur(q.habit)):'')
-   +(q.superPres>0?linea('Súper que falta por gastar (de '+eur0(q.superPres)+')','− '+eur(q.superFalta)):'')
-   +(q.gasPres>0?linea('Gasolina que falta por gastar (de '+eur0(q.gasPres)+')','− '+eur(q.gasFalta)):'')
-   +q.exL.filter(x=>x.falta>0).map(x=>linea(esc(x.nombre)+' que falta por gastar (de '+eur0(x.pres)+')','− '+eur(x.falta))).join('')
+   +(q.superPres>0?linea('Súper que falta por gastar (de '+eur0(q.superPres)+')','− '+eur(q.superFalta),'','super'):'')
+   +(q.gasPres>0?linea('Gasolina que falta por gastar (de '+eur0(q.gasPres)+')','− '+eur(q.gasFalta),'','gasolina'):'')
+   +q.exL.filter(x=>x.falta>0).map(x=>linea(esc(x.nombre)+' que falta por gastar (de '+eur0(x.pres)+')','− '+eur(x.falta),'',x.id)).join('')
    +linea('<b>Para gastar hasta fin de mes</b>','<b>'+eur(q.queda)+'</b>')
    +(q.superPres>0?'<div role="button" tabindex="0" style="cursor:pointer;margin-top:8px" onclick="verCat(\'super\')" aria-label="Ver los movimientos del súper"><div class="small">🛒 Súper: lleváis <b>'+eur(Math.max(0,q.superGast))+'</b> de '+eur0(q.superPres)+(q.superGast>q.superPres?' <b style="color:var(--neg)">(pasados '+eur(q.superGast-q.superPres)+')</b>':'')+' <small class="muted">›</small></div><div class="bar" style="height:8px;margin-top:4px"><i style="width:'+Math.min(100,Math.max(0,q.superGast)/q.superPres*100)+'%;background:'+(q.superGast>q.superPres?'var(--neg)':'var(--brand)')+'"></i></div><p class="small muted" style="margin:4px 0 0">Los '+eur0(q.superPres)+' del súper (se cambian en Ajustes, en Categorías) están reservados desde el principio del mes: no cuentan como dinero libre ni como ahorro.</p></div>':'')
    +(q.pendA>0?'<p class="small muted">Amazon aún no se ha cobrado en el banco, pero ya está descontado de lo que queda. Al importar el extracto desaparece esta línea.</p>':'')
    +(q.esperaNomina?'<p class="small muted">El diezmo se sumará cuando entre la nómina.</p>':'')
    +(q.sinImporte.length?'<p class="small muted">Sin importe todavía: '+q.sinImporte.map(esc).join(', ')+'. Cuando llegue la factura, apúntala.</p>':'')
-   +(q.delAhorro>0?'<p class="small" style="margin-top:8px;color:var(--warn)"><b>⚠️ Sacado del ahorro este mes: '+eur(q.delAhorro)+'</b>. Es dinero que en principio no se toca.'+(q.queda>=0?' Sin él, os '+(q.propio<0?'faltarían '+eur(-q.propio):'quedarían '+eur(q.propio))+'.':'')+'</p>':'')
-   +(q.yaAhorro>0.005?'<p class="small" style="margin-top:8px">🐖 <b>Ya pasado a ahorro este mes: '+eur(q.yaAhorro)+'</b>. Ya está descontado de lo que queda.</p>':'')
+   +(q.delAhorro>0?'<p class="small" role="button" tabindex="0" style="margin-top:8px;color:var(--warn);cursor:pointer" onclick="verCat(\'@lq:delahorro\')"><b>⚠️ Sacado del ahorro este mes: '+eur(q.delAhorro)+' ›</b>. Es dinero que en principio no se toca.'+(q.queda>=0?' Sin él, os '+(q.propio<0?'faltarían '+eur(-q.propio):'quedarían '+eur(q.propio))+'.':'')+'</p>':'')
+   +(q.yaAhorro>0.005?'<p class="small" role="button" tabindex="0" style="margin-top:8px;cursor:pointer" onclick="verCat(\'@lq:yaahorro\')">🐖 <b>Ya pasado a ahorro este mes: '+eur(q.yaAhorro)+' ›</b>. Ya está descontado de lo que queda.</p>':'')
    +(st!==null?'<p class="small muted" style="margin-top:8px">🏦 Ahorro en '+esc(tr.nombre)+': <b>'+eur(st)+'</b></p>':'')
    +'<p class="small muted">Saldo puesto el '+fechaCorta(q.cuenta.fecha)+'. <a href="#" onclick="ir(\'ajustes\');return false">Actualizar</a></p></section>';
 }
