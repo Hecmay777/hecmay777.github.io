@@ -229,6 +229,7 @@ function defaultCfg(){
       C('transporte','Transporte','🚌','variable'),
       C('ocio','Ocio','🎉','variable'),
       C('deporte','Deporte','🏃','variable'),
+      C('padel','Pádel','🎾','variable',{presupuesto:45,reservar:true,ico:'deporte',color:'#2E86C1'}),
       C('casa','Cosas de casa','🏠','variable'),
       C('ropa','Ropa','👕','variable'),
       C('farmacia','Farmacia','💊','variable'),
@@ -257,6 +258,7 @@ function defaultCfg(){
       C('hacienda','Hacienda','🧾','ingreso'),
       C('otros_ing','Otros ingresos','💶','ingreso'),
       C('traspaso','Traspaso entre cuentas','🔁','neutro'),
+      C('compras_otros','Compras para otros','🛍️','neutro',{destacada:true,ico:'amazon'}),
       C('pago_tarjeta','Pago de la tarjeta','💳','neutro'),
       C('inversion','Inversión / ahorro','📈','neutro')
     ],
@@ -571,10 +573,20 @@ function numFechaOcr(y,m,d){
   const f=y+'-'+pad(m)+'-'+pad(d);return f<'2020-01-01'||f>ymd(new Date(Date.now()+864e5))?null:f;
 }
 function fechaDeTicket(t){const m=String(t).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}|\d{2})(?!\d)/);return m?numFechaOcr(m[3],m[2],m[1]):null}
+const RUIDO_CABECERA=/BIENVENID|GRACIAS|TICKET|FACTURA|SIMPLIFICAD|NIF|CIF\b|TEL[EÉ]F|^TEL|WWW\.|HTTP|\.COM|\.ES\b|COPIA|CLIENTE|DUPLICADO|ORIGINAL|C\.?P\.?\s*:?\s*\d|CALLE|C\/|AVDA|AVENIDA|PLAZA|OPERADOR|FECHA|HORA|CAJA|VENDEDOR|ATENDID|SERVIDO|HOJA|PEDIDO|MESA|LOCAL|COMPRA|PUNTOS|SOCIO|^[-=*_ .]+$/i;
 function comercioDeTicket(t){
   if(/MERCADONA/i.test(t))return 'Mercadona';
-  const l=String(t).split(/\r?\n/).map(x=>x.trim()).find(x=>(x.match(/[A-Za-zÁÉÍÓÚÑáéíóúñ]/g)||[]).length>=3&&!/^\d/.test(x)&&!/TICKET|FACTURA|NIF|CIF/i.test(x));
-  return l?l.replace(/\s+/g,' ').slice(0,28).toLowerCase().replace(/(^|\s)\S/g,s=>s.toUpperCase()):'';
+  const L=String(t).split(/\r?\n/).map(x=>x.replace(/\s+/g,' ').trim()).filter(Boolean);
+  const letras=x=>(x.match(/[A-Za-zÁÉÍÓÚÑáéíóúñ]/g)||[]).length;
+  const bonito=x=>x.replace(/^[-=*_.\s]+|[-=*_.\s]+$/g,'').slice(0,28).toLowerCase().replace(/(^|\s)\S/g,s=>s.toUpperCase());
+  const SUF=/[,.]?\s*\b(?:S\.?\s?L\.?(?:\s?U\.?)?|S\.?\s?A\.?(?:\s?U\.?)?|S\.?\s?C\.?|C\.?B\.?)\s*[,.]?$/i;
+  /* 1) la primera línea de cabecera que parezca el nombre (sin saludos, direcciones, teléfonos ni importes) */
+  const l=L.slice(0,10).find(x=>letras(x)>=3&&!/^\d/.test(x)&&!RUIDO_CABECERA.test(x)&&!/\d[.,]\d{2}\b|TOTAL|IVA\b|IMPORTE|EUR|€/i.test(x)&&letras(x)>=x.replace(/[\s\-:.,\/]/g,'').length*0.5);
+  if(l)return bonito(l.replace(SUF,''));
+  /* 2) si no hay cabecera clara, la razón social (suele ir junto al CIF) */
+  const rs=L.find(x=>letras(x)>=4&&SUF.test(x)&&!/^\d/.test(x)&&!/\d[.,]\d{2}\b/.test(x));
+  if(rs)return bonito(rs.replace(SUF,''));
+  return '';
 }
 /* Ticket de un comercio cualquiera. El lector de Google a veces separa descripción e importe en líneas distintas: se admiten las dos formas */
 function parseGenerico(texto){
@@ -674,17 +686,26 @@ function dupTicket(fecha,importe,tipo,usados){
 let lec=null;
 const NUM_IMP='(\\d{1,3}(?:[.,]\\d{3})*[.,]\\d{2}|\\d+[.,]\\d{2})(?!\\d)';
 function importeDeCompra(texto){
-  const L=String(texto).split(/\r?\n/).map(l=>l.replace(/\u00a0/g,' ').trim()).filter(Boolean);
-  const am=l=>{const m=l.replace(/(\d)\s+(\d{2})(?!\d)/g,'$1,$2').match(new RegExp('(?:EUR|€|\\$)?\\s*'+NUM_IMP+'\\s*(?:EUR|€)?','i'));return m?parseNum(m[1]):0};
+  const L=String(texto).split(/\r?\n/).map(l=>l.replace(/ /g,' ').trim()).filter(Boolean);
+  /* un número y dos cifras separadas por espacio se juntan («12 50» = 12,50) salvo que sea una fecha, una hora o un código */
+  const am=l=>{const m=l.replace(/(\d)\s+(\d{2})(?![\d\-\/.:])/g,'$1,$2').match(new RegExp('(?:EUR|€|\\$)?\\s*'+NUM_IMP+'\\s*(?:EUR|€)?','i'));return m?parseNum(m[1]):0};
+  const RUIDO=/\bC:|CIF|NIF|TEL[EÉ]F|TICKET|FACTURA|CAJA|AUTORIZ|\bARC\b|\bAID\b|ESTABLECIMIENTO|N[UÚ]MERO|FECHA|OPERACI[OÓ]N|\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{1,2}:\d{2}/i;
   const FUERTE=/TOTAL (?:DEL )?PEDIDO|TOTAL A PAGAR|IMPORTE TOTAL|TOTAL PAGADO|ORDER TOTAL|GRAND TOTAL|IMPORTE PAGADO|A PAGAR|TOTAL \(IVA|TOTAL FACTURA|TOTAL EUR/i,MALO=/SUBTOTAL|SIN IVA|ANTES DE|ENV[IÍ]O|GASTOS DE|BASE|CUOTA|DESCUENTO|AHORRO/i;
-  let fuerte=0,flojo=0;
+  const f=[],fl=[],md=[];
   L.forEach((l,i)=>{
     if(MALO.test(l)||!/TOTAL|A PAGAR|IMPORTE|PAGADO/i.test(l))return;
     const v=am(l)||am(L[i+1]||'');if(!(v>0))return;
-    if(FUERTE.test(l)){if(!fuerte)fuerte=v}else if(/TOTAL/i.test(l))flojo=v;
+    if(FUERTE.test(l))f.push(v);else if(/TOTAL/i.test(l))fl.push(v);else md.push(v);
   });
-  if(fuerte)return fuerte;if(flojo)return flojo;
-  const todos=L.map(am).filter(v=>v>0);return todos.length?Math.max(...todos):0;
+  /* varios candidatos: gana el que se repite (total del ticket + comprobante de la tarjeta); si no, el primero de su categoría */
+  const elige=a=>{if(!a.length)return 0;const c={};a.forEach(v=>c[v]=(c[v]||0)+1);const rep=a.filter(v=>c[v]>1);return rep.length?rep[0]:a[0]};
+  if(f.length)return elige(f.concat(md.filter(v=>f.includes(v))));
+  if(fl.length)return elige(fl.concat(md.filter(v=>fl.includes(v))));
+  if(md.length)return elige(md);
+  const todos=L.filter(l=>!RUIDO.test(l)).map(am).filter(v=>v>0&&v<5000);
+  if(!todos.length)return 0;
+  const c={};todos.forEach(v=>c[v]=(c[v]||0)+1);const rep=todos.filter(v=>c[v]>1);
+  return rep.length?Math.max(...rep):Math.max(...todos);
 }
 const MARCAS=/AMAZON|ALIEXPRESS|PAYPAL|ZARA|IKEA|DECATHLON|EL CORTE INGLES|LEROY MERLIN|APPLE|GOOGLE|NETFLIX|SPOTIFY|BOLT|UBER|GLOVO|JUST EAT|RYANAIR|VUELING|BOOKING|PCCOMPONENTES|MEDIAMARKT|WALLAPOP|VINTED|TEMU|SHEIN|BIZUM|REVOLUT/i;
 function comercioDeCompra(t){const m=String(t).match(MARCAS);return m?m[0].toLowerCase().replace(/(^|\s)\S/g,s=>s.toUpperCase()):comercioDeTicket(t)}
@@ -986,6 +1007,7 @@ function verAhorro(){
    +fila(pv0?'Gastos ya pagados':'Gastos','− '+eur(pv0?pv0.pagados:t.gastos),'','@gas')
    +(rs>0?fila('Súper que falta por gastar','− '+eur(rs),'','super'):'')
    +(pv0&&pv0.rg>0?fila('Gasolina que falta por gastar','− '+eur(pv0.rg),'','gasolina'):'')
+   +(pv0?pv0.rx.lista.filter(x=>x.falta>0).map(x=>fila(esc(x.nombre)+' que falta por gastar','− '+eur(x.falta),'',x.id)).join(''):'')
    +(pv0?'<div class="bhead" style="padding:10px 0;border-bottom:1px solid var(--line)"><span><b>Ahorro de ahora</b></span><b>'+eur(pv0.ahora)+'</b></div>'+(pv0.fij>0?'<div class="bhead" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Recibos fijos que faltan por cobrar</span><b>− '+eur(pv0.fij)+'</b></div>':'')+(pv0.hab>0?'<div class="bhead" style="padding:10px 0;border-bottom:1px solid var(--line)"><span>Gastos habituales que aún no han llegado (estimado)</span><b>− '+eur(pv0.hab)+'</b></div>':''):'')
    +'<div class="bhead" style="padding:12px 0"><span><b>'+(pv0?'Ahorro previsto a fin de mes':'Ahorro')+'</b></span><b class="'+(t.ahorro>=0?'pos':'neg')+'" style="font-size:20px">'+eur(t.ahorro)+'</b></div>'
    +(pct!==null?'<p class="small" style="margin:0 0 8px">Es el <b>'+pct+' %</b> de los ingresos'+(med!==null?'. De media, en los meses anteriores, fue el <b>'+med+' %</b>.':'.')+'</p>':'')
@@ -1081,21 +1103,32 @@ function presSuper(){return presCat('super')}
 function resGas(y,m){const mh=mesContHoy();if(y!==mh.y||m!==mh.m)return 0;const pr=presCat('gasolina');if(pr<=0)return 0;const g=deMes(y,m).filter(x=>x.categoria==='gasolina').reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0);return r2(Math.max(0,pr-g))}
 /* Súper que aún falta por gastar este mes (solo el mes contable actual): se resta del ahorro previsto */
 function resSuper(y,m){const mh=mesContHoy();if(y!==mh.y||m!==mh.m)return 0;const pr=presSuper();if(pr<=0)return 0;const g=deMes(y,m).filter(x=>x.categoria==='super').reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0);return r2(Math.max(0,pr-g))}
+/* Partidas reservadas (p. ej. Pádel): se reservan enteras desde el principio del mes contable y se van gastando, igual que el súper y la gasolina */
+function resExtra(y,m){
+  const mh=mesContHoy(),lista=[];
+  if(y===mh.y&&m===mh.m)cfg.cats.forEach(c=>{
+    if(!c.reservar||c.oculta||c.id==='super'||c.id==='gasolina')return;
+    const pr=Math.max(0,Number(c.presupuesto)||0);if(pr<=0)return;
+    const g=deMes(y,m).filter(x=>x.categoria===c.id).reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0);
+    lista.push({id:c.id,nombre:c.nombre,pres:pr,gast:r2(g),falta:r2(Math.max(0,pr-g))});
+  });
+  return {lista,total:r2(lista.reduce((a,x)=>a+x.falta,0))};
+}
 /* Ahorro del mes en curso: «ahora» (ingresos − gastos − súper que falta) y «previsto» (además − recibos que faltan − habituales estimados). Deja en t.ahorro el previsto */
 function conPrevisto(t,y,m){
   const mh=mesContHoy();t.prev=null;
   if(y!==mh.y||m!==mh.m)return t;
-  const rs=resSuper(y,m),rg=resGas(y,m),pend=pendientesFijos(y,m,t),h0=hoy();
+  const rs=resSuper(y,m),rg=resGas(y,m),rx=resExtra(y,m),pend=pendientesFijos(y,m,t),h0=hoy();
   // Recibos ya apuntados con fecha futura (aún no cobrados) + los que faltan por apuntar
   const fut=r2(deMes(y,m).filter(x=>String(x.fecha)>h0).reduce((a,x)=>{const g=catById(x.categoria).grupo;return (g==='fijo'||g==='variable')?a+(x.tipo==='gasto'?x.importe:-x.importe):a},0));
   const fij=r2(fut+pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0)),hab=r2(habituales(y,m).reduce((a,h)=>a+h.importe,0));
-  const prev=r2(t.ahorro-rs-rg-pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0)-hab),ahora=r2(prev+fij+hab);
+  const prev=r2(t.ahorro-rs-rg-rx.total-pend.reduce((a,f)=>a+(Number(f.sugerido)||0),0)-hab),ahora=r2(prev+fij+hab);
   const pagados=r2(t.gastos-fut);
   let sobrante=null;const q=quedaMes();
   if(q){const ids=new Set(cuentasVis().filter(c=>c.tipo==='dia'||c.tipo==='personal').map(c=>c.id));
     const neu=r2(deMes(y,m).filter(x=>catById(x.categoria).grupo==='neutro'&&ids.has(cuentaDe(x))).reduce((a,x)=>a+(x.tipo==='ingreso'?x.importe:-x.importe),0));
     sobrante=r2(q.saldo-(t.ingreso-pagados)-neu-q.pendA)}
-  t.prev={rs,rg,fij,hab,ahora,pagados,sobrante,diezmo:pend.some(f=>f.porcentaje&&!(f.sugerido>0))};
+  t.prev={rs,rg,rx,fij,hab,ahora,pagados,sobrante,diezmo:pend.some(f=>f.porcentaje&&!(f.sugerido>0))};
   t.ahorro=prev;return t;
 }
 function quedaMes(){
@@ -1123,7 +1156,8 @@ function quedaMes(){
   const superFalta=superPres>0?r2(Math.max(0,superPres-superGast)):0;
   const gasPres=presCat('gasolina'),gasGast=r2(deMes(y,m).filter(x=>x.categoria==='gasolina').reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0));
   const gasFalta=gasPres>0?r2(Math.max(0,gasPres-gasGast)):0;
-  const queda=r2(saldo-fijos-pendA-habit-superFalta-gasFalta);
+  const exL=resExtra(y,m).lista,exFalta=r2(exL.reduce((a,x)=>a+x.falta,0));
+  const queda=r2(saldo-fijos-pendA-habit-superFalta-gasFalta-exFalta);
   const yaAhorro=r2(movs.filter(x=>!x.borrado&&ids.has(cuentaDe(x))&&(x.categoria==='hucha'||x.categoria==='inversion')&&x.fecha>=pe.ini&&x.fecha<=pe.fin&&x.fecha<=h0).reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0));
   const fin=pe.dias,dias=Math.max(1,diasEntre(hoy(),pe.fin)+1);
   // El ritmo (anillo y aviso) mira solo el gasto del día a día: los recibos fijos no cuentan
@@ -1132,7 +1166,7 @@ function quedaMes(){
   const pref=y+'-'+pad(m+1);
   const ahorros=new Set(cuentasVis().filter(c=>c.tipo==='ahorro').map(c=>c.id));
   const delAhorro=r2(movs.filter(x=>!x.borrado&&ahorros.has(cuentaDe(x))&&x.tipo==='gasto'&&x.fecha>=pe.ini&&x.fecha<=pe.fin).reduce((a,x)=>a+x.importe,0));
-  return {cuenta:bk,yaAhorro,partes,saldo,sinCobrar:r2(partes.reduce((a,x)=>a+x.sinCobrar,0)),fijos,pendA,habit,superPres,superGast,superFalta,gasPres,gasGast,gasFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
+  return {cuenta:bk,yaAhorro,partes,saldo,sinCobrar:r2(partes.reduce((a,x)=>a+x.sinCobrar,0)),fijos,pendA,habit,superPres,superGast,superFalta,gasPres,gasGast,gasFalta,exL,exFalta,esperaNomina,sinImporte,queda,dias,delAhorro,propio:r2(queda-delAhorro),porDia:queda>0?r2(queda/dias):0,gastado,consumo:total>0?gastado/total:1,ritmo:Math.max(0,Math.min(1,(diasEntre(pe.ini,hoy())+1)/fin))};
 }
 /* Anillo de lo que queda: lleno a principio de mes, se vacía al gastar. La rayita marca dónde «tocaría» estar hoy */
 function anilloQueda(q,col,px,centro){
@@ -1170,6 +1204,7 @@ function tarjetaSaldo(compacta){
    +(q.habit>0?linea('Gastos habituales que aún no han llegado (estimado)','− '+eur(q.habit)):'')
    +(q.superPres>0?linea('Súper que falta por gastar (de '+eur0(q.superPres)+')','− '+eur(q.superFalta)):'')
    +(q.gasPres>0?linea('Gasolina que falta por gastar (de '+eur0(q.gasPres)+')','− '+eur(q.gasFalta)):'')
+   +q.exL.filter(x=>x.falta>0).map(x=>linea(esc(x.nombre)+' que falta por gastar (de '+eur0(x.pres)+')','− '+eur(x.falta))).join('')
    +linea('<b>Para gastar hasta fin de mes</b>','<b>'+eur(q.queda)+'</b>')
    +(q.superPres>0?'<div role="button" tabindex="0" style="cursor:pointer;margin-top:8px" onclick="verCat(\'super\')" aria-label="Ver los movimientos del súper"><div class="small">🛒 Súper: lleváis <b>'+eur(Math.max(0,q.superGast))+'</b> de '+eur0(q.superPres)+(q.superGast>q.superPres?' <b style="color:var(--neg)">(pasados '+eur(q.superGast-q.superPres)+')</b>':'')+' <small class="muted">›</small></div><div class="bar" style="height:8px;margin-top:4px"><i style="width:'+Math.min(100,Math.max(0,q.superGast)/q.superPres*100)+'%;background:'+(q.superGast>q.superPres?'var(--neg)':'var(--brand)')+'"></i></div><p class="small muted" style="margin:4px 0 0">Los '+eur0(q.superPres)+' del súper (se cambian en Ajustes, en Categorías) están reservados desde el principio del mes: no cuentan como dinero libre ni como ahorro.</p></div>':'')
    +(q.pendA>0?'<p class="small muted">Amazon aún no se ha cobrado en el banco, pero ya está descontado de lo que queda. Al importar el extracto desaparece esta línea.</p>':'')
