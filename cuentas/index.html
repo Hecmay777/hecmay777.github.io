@@ -355,8 +355,8 @@ function defaultCfg(){
 }
 
 /* ===================== estado ===================== */
-let movs=store.get('cc_movs',[]);oculto=store.get('cc_oculto',false)===true;
-let cfg=store.get('cc_cfg',null)||defaultCfg();
+let movs=(()=>{const m=store.get('cc_movs',[]);return Array.isArray(m)?m.filter(x=>x&&typeof x==='object'):[]})();oculto=store.get('cc_oculto',false)===true;
+let cfg=(()=>{const c=store.get('cc_cfg',null);return c&&typeof c==='object'&&Array.isArray(c.cats)?c:defaultCfg()})();
 /* Añade las categorías nuevas de serie a una configuración ya guardada (sin tocar lo demás) */
 const idSeg=s=>{s=String(s??'');return s.length>0&&s.length<=120&&!/['"`\\<>&]/.test(s)};
 function limpiarCfg(c){
@@ -369,7 +369,9 @@ function limpiarCfg(c){
   return c;
 }
 function asegurarCats(c){
+  if(!c||typeof c!=='object'||!Array.isArray(c.cats))c=defaultCfg();
   limpiarCfg(c);
+  ['fijos','atajos'].forEach(k=>{if(!Array.isArray(c[k]))c[k]=[]});
   const base=defaultCfg().cats;let cambio=false;
   base.forEach((d,i)=>{
     if(c.cats.some(x=>x.id===d.id))return;
@@ -392,7 +394,7 @@ function asegurarCats(c){
   if(cambio){c.modificado=(Number(c.modificado)||0)+1;store.set('cc_cfg',c)}
   return c;
 }
-asegurarCats(cfg);
+try{cfg=asegurarCats(cfg)}catch(e){cfg=asegurarCats(defaultCfg())}
 let sync=store.get('cc_sync',{url:'',clave:'',desde:0,ultimaOk:0,error:''});
 let yo=store.get('cc_yo',null)||cfg.personas[0];
 let vista='apuntar';
@@ -404,8 +406,14 @@ let filtroTxt='',filtroCat='';
 let imp={banco:'Bankinter',raw:null,map:null,filas:[],nombre:''};
 setTimeout(()=>{if(!cuentaImp()){const c=cuentaDia();if(c)imp.banco=claveImp(c)}},0);
 
-const saveMovs=()=>store.set('cc_movs',movs);
-function saveCfg(){cfg.modificado=Date.now();store.set('cc_cfg',cfg);programarSync();try{if(vista==='ajustes'&&!bienv)toast('✓ Guardado')}catch(e){}}
+const saveMovs=()=>{if(!store.set('cc_movs',movs))sync.v2=0};
+function mezclarCfg(dst,src){
+  if(!src||typeof src!=='object')return false;let ch=false;
+  [['cats','id'],['fijos','id'],['atajos','id'],['cuentas','id']].forEach(([k,i])=>{if(!Array.isArray(src[k]))return;if(!Array.isArray(dst[k]))dst[k]=[];src[k].forEach(x=>{if(x&&typeof x==='object'&&x[i]!==undefined&&!dst[k].some(y=>y&&y[i]===x[i])){dst[k].push(x);ch=true}})});
+  if(Array.isArray(src.reglas)){if(!Array.isArray(dst.reglas))dst.reglas=[];src.reglas.forEach(r=>{if(r&&r.texto&&!dst.reglas.some(x=>norm(x.texto)===norm(r.texto))&&(dst.cats||[]).some(c=>c.id===r.cat)){dst.reglas.push(r);ch=true}})}
+  return ch;
+}
+function saveCfg(){cfg.modificado=Date.now();sync.cfgPend=1;store.set('cc_cfg',cfg);store.set('cc_sync',sync);programarSync();try{if(vista==='ajustes'&&!bienv)toast('✓ Guardado')}catch(e){}}
 const catById=id=>cfg.cats.find(c=>c.id===id)||{id,nombre:id||'Sin categoría',icono:'❔',grupo:'variable'};
 const visibles=g=>cfg.cats.filter(c=>c.grupo===g&&!c.oculta);
 
@@ -1134,11 +1142,12 @@ function lqMovs(k){
   if(k==='yaahorro')return movs.filter(x=>!x.borrado&&ids.has(cuentaDe(x))&&(x.categoria==='hucha'||x.categoria==='inversion')&&x.fecha>=pe.ini&&x.fecha<=pe.fin&&x.fecha<=h0);
   return [];
 }
-function coincideCat(m,f){if(!f)return true;if(f.indexOf('@lq:')===0){const k=f.slice(4);return lqMovs(k).some(x=>x.id===m.id)}if(f.indexOf('@resto:')===0)return f.slice(7).split(',').indexOf(m.categoria)>=0&&m.tipo==='gasto';const g=catById(m.categoria).grupo;if(f==='@ing')return g==='ingreso';if(f==='@gas')return g==='variable'||g==='fijo';if(f==='@neu')return g==='neutro';return m.categoria===f}
+function coincideCat(m,f,lqS){if(!f)return true;if(f.indexOf('@lq:')===0){return (lqS||new Set(lqMovs(f.slice(4)).map(x=>x.id))).has(m.id)}if(f.indexOf('@resto:')===0)return f.slice(7).split(',').indexOf(m.categoria)>=0&&m.tipo==='gasto';const g=catById(m.categoria).grupo;if(f==='@ing')return g==='ingreso';if(f==='@gas')return g==='variable'||g==='fijo';if(f==='@neu')return g==='neutro';return m.categoria===f}
 function listaHTML(){
   const q=norm(filtroTxt);
   const todo=!!q&&q.length>=2;
-  const list=(filtroCat.indexOf('@lq:')===0||todo?movs.filter(x=>!x.borrado):movAno?deAno(vm.y):deMes(vm.y,vm.m)).filter(m=>coincideCat(m,filtroCat)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
+  const lqSet=filtroCat.indexOf('@lq:')===0?new Set(lqMovs(filtroCat.slice(4)).map(x=>x.id)):null;
+  const list=(filtroCat.indexOf('@lq:')===0||todo?movs.filter(x=>!x.borrado):movAno?deAno(vm.y):deMes(vm.y,vm.m)).filter(m=>coincideCat(m,filtroCat,lqSet)&&(!q||norm(m.nota+' '+catById(m.categoria).nombre+' '+m.sub+' '+m.quien).includes(q)))
     .sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.creado-a.creado);
   if(!list.length)return '<p class="muted small">'+(todo?'No hay nada con ese texto en ningún mes.':'No hay movimientos.')+'</p>';
   const ya=String(new Date().getFullYear());
@@ -2206,7 +2215,7 @@ async function restaurarCopia(f){
     const d=JSON.parse(await f.text());if(!Array.isArray(d.movs))throw 0;
     let n=0;
     d.movs.filter(r=>r&&typeof r.id==='string'&&idSeg(r.id)&&/^\d{4}-\d{2}-\d{2}/.test(String(r.fecha))&&isFinite(Number(r.importe))&&(r.tipo==='gasto'||r.tipo==='ingreso')).forEach(r=>{r.importe=Number(r.importe);const i=movs.findIndex(m=>m.id===r.id);if(i<0){movs.push({...r,pend:true});n++}else if((r.modificado||0)>(movs[i].modificado||0)){movs[i]={...r,pend:true};n++}});
-    if(d.cfg&&(d.cfg.modificado||0)>(cfg.modificado||0)){cfg=asegurarCats(d.cfg);store.set('cc_cfg',cfg)}
+    if(d.cfg&&Array.isArray(d.cfg.cats)){if((d.cfg.modificado||0)>(cfg.modificado||0)){cfg=asegurarCats(d.cfg);store.set('cc_cfg',cfg)}else if(mezclarCfg(cfg,d.cfg)){saveCfg()}}
     saveMovs();programarSync();render();toast('Copia restaurada: '+n+' movimientos recuperados');
   }catch(e){toast('Ese archivo no es una copia válida')}
 }
@@ -2242,6 +2251,7 @@ async function sincronizar(manual){
     const primera=!sync.desde;
     const completa=!sync.v2; // una vez tras actualizar: baja todo de nuevo por si algún apunte automático se quedó sin llegar
     const desde=completa?0:Math.max(0,(sync.desde||0)-15*60*1000); // margen de 15 min: los tickets automáticos tardan en escribirse
+    const cfgEnv=cfg.modificado;
     const j=await llamar({accion:'sync',desde:desde,movs:enviar,cfg:primera?null:cfg});
     const enviados=new Map(enviar.map(m=>[m.id,m.modificado]));
     movs.forEach(m=>{if(m.pend&&enviados.get(m.id)===m.modificado)m.pend=false});
@@ -2255,8 +2265,9 @@ async function sincronizar(manual){
     });
     {const vistos=new Map(),t=Date.now();movs.forEach(m=>{if(m.borrado||!m.importKey||/^(tk|gmail)\|/.test(String(m.importKey)))return;const o=vistos.get(m.importKey);if(!o){vistos.set(m.importKey,m);return}const [gana,pierde]=((o.creado||0)<(m.creado||0)||((o.creado||0)===(m.creado||0)&&String(o.id)<String(m.id)))?[o,m]:[m,o];vistos.set(m.importKey,gana);Object.assign(pierde,{borrado:true,modificado:t,pend:true})})}
     if(primera&&!j.cfg)programarSync(); // hoja nueva: en la siguiente vuelta se guarda esta configuración
-    if(j.cfg&&(primera||(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0))){const loc=cfg;cfg=asegurarCats(j.cfg);if(primera){const dc=defaultCfg(),bc=new Set(dc.cats.map(c=>c.id)),br=new Set(dc.reglas.map(r=>norm(r.texto)));let ch=0;loc.cats.forEach(c=>{if(!bc.has(c.id)&&!cfg.cats.some(x=>x.id===c.id)){cfg.cats.push(c);ch=1}});loc.reglas.forEach(r=>{if(!br.has(norm(r.texto))&&!cfg.reglas.some(x=>norm(x.texto)===norm(r.texto))&&cfg.cats.some(c=>c.id===r.cat)){cfg.reglas.push(r);ch=1}});if(ch)cfg.modificado=Date.now()}store.set('cc_cfg',cfg);if(!cfg.personas.includes(yo)&&!store.get('cc_yo',null))yo=cfg.personas[0]}
-    if(primera&&!store.get('cc_yo',null)&&cfg.personas.length>1)setTimeout(preguntarYo,400);sync.desde=j.ahora;sync.v2=1;sync.ultimaOk=Date.now();sync.error='';mercaCache={};
+    let mezcla=false;
+    if(j.cfg&&(primera||(Number(j.cfg.modificado)||0)>(Number(cfg.modificado)||0))){const loc=cfg;cfg=asegurarCats(j.cfg);if(!primera&&sync.cfgPend&&mezclarCfg(cfg,loc)){cfg.modificado=Math.max(Date.now(),(Number(cfg.modificado)||0)+1);mezcla=true}if(primera){const dc=defaultCfg(),bc=new Set(dc.cats.map(c=>c.id)),br=new Set(dc.reglas.map(r=>norm(r.texto)));let ch=0;loc.cats.forEach(c=>{if(!bc.has(c.id)&&!cfg.cats.some(x=>x.id===c.id)){cfg.cats.push(c);ch=1}});loc.reglas.forEach(r=>{if(!br.has(norm(r.texto))&&!cfg.reglas.some(x=>norm(x.texto)===norm(r.texto))&&cfg.cats.some(c=>c.id===r.cat)){cfg.reglas.push(r);ch=1}});if(ch)cfg.modificado=Date.now()}store.set('cc_cfg',cfg);if(!cfg.personas.includes(yo)&&!store.get('cc_yo',null))yo=cfg.personas[0]}
+    if(primera&&!store.get('cc_yo',null)&&cfg.personas.length>1)setTimeout(preguntarYo,400);sync.desde=j.ahora;sync.v2=1;if(!mezcla&&!primera&&cfg.modificado===cfgEnv)sync.cfgPend=0;if(mezcla)setTimeout(programarSync,100);sync.ultimaOk=Date.now();sync.error='';mercaCache={};
     store.set('cc_sync',sync);saveMovs();
     if(!syncSesion){syncSesion=true;try{generarFijos()}catch(e){}}
     if(manual)toast('Todo guardado en la nube');
