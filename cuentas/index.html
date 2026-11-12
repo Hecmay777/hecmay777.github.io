@@ -263,7 +263,7 @@ function defaultCfg(){
       C('inversion','Inversión / ahorro','📈','neutro')
     ],
     fijos:[],
-    fijosV:2,
+    fijosV:3,
     reglas:[
       R('MERCADONA','super'),R('LIDL','super'),R('ALDI','super'),R('EROSKI','super'),R('CARREFOUR','super'),R('CONSUM','super'),R('SUPERMERCADO','super'),R('HIPERCENTRO','super'),
       R('AMAZON','amazon'),R('AMZN','amazon'),
@@ -309,6 +309,8 @@ function asegurarCats(c){
   if(!c.nominaSig){c.nominaSig={dia:20};cambio=true}
   if(!c.cierre){c.cierre={dia:28};cambio=true}
   if((Number(c.fijosV)||0)<2){c.fijosV=2;cambio=true}
+  /* Compassion: en noviembre se paga el doble (regalos de Navidad), todos los años */
+  if((Number(c.fijosV)||0)<3){const fc=(c.fijos||[]).find(f=>f.cat==='compassion');if(fc&&!fc.porMes)fc.porMes={11:60};c.fijosV=3;cambio=true}
   if(!Array.isArray(c.cuentas))c.cuentas=[];
   if(!c.cuentas.length){c.cuentas=defaultCfg().cuentas;cambio=true} // las cuentas ya las gestiona cada uno
   if(!Array.isArray(c.reglas))c.reglas=[];
@@ -531,7 +533,7 @@ function icoCat(c,cls){
   return '<span class="icoc emo'+(cls?' '+cls:'')+'" style="background:'+(c.color||COLORES_LIBRES[h%COLORES_LIBRES.length])+'" aria-hidden="true">'+esc(c.icono||String(c.nombre||'?').slice(0,1))+'</span>';
 }
 function signo(m){const c=catById(m.categoria);if(c.grupo==='neutro')return ['','neu'];const entra=c.grupo==='ingreso'?m.tipo==='ingreso':m.tipo!=='gasto';return entra?['+','pos']:['−','neg']}
-const tieneTicket=m=>m.origen==='Mercadona'&&/^gm_[0-9a-f]+$/i.test(String(m.id));
+const tieneTicket=m=>!!m.ticket||(m.origen==='Mercadona'&&/^gm_[0-9a-f]+$/i.test(String(m.id)));
 function itemMov(m){
   const c=catById(m.categoria);const [s,cls]=signo(m);
   const mc=mesCont(m),otroMes=mc!==String(m.fecha).slice(0,7)?'cuenta para '+MESES[+mc.slice(5,7)-1].toLowerCase():'';
@@ -573,11 +575,11 @@ async function leerImagen(f){
   const pdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
   if(pdf&&f.size>6e6){toast('El PDF pesa demasiado (máximo 6 MB). Prueba con una captura.');return}
   $('#sheet').innerHTML='<h2>Leyendo…</h2><p class="muted">Suele tardar unos segundos.</p>';abrir();
-  let j;
-  try{j=await llamar({accion:'ocr',imagen:pdf?await leerComoBase64(f):await reducirImagen(f),mime:pdf?'application/pdf':'image/jpeg'})}
+  let j,b64;
+  try{b64=pdf?await leerComoBase64(f):await reducirImagen(f);j=await llamar({accion:'ocr',imagen:b64,mime:pdf?'application/pdf':'image/jpeg'})}
   catch(e){cerrar();toast('No he podido leer el archivo: '+(e.message||e));return}
   if(typeof j.texto!=='string'){cerrar();toast('Falta actualizar el script de Google para leer imágenes');return}
-  lec={texto:j.texto,srv:j.ticket};cp=null;
+  lec={texto:j.texto,srv:j.ticket,img:{b64,mime:pdf?'application/pdf':'image/jpeg'}};cp=null;
   aplicarLectura(tipoDeTexto(j.texto,j.ticket));
 }
 /* ---- ticket de compra ---- */
@@ -670,6 +672,16 @@ function pintarTicket(){
    +'<button class="btn" onclick="guardarTicket()">'+(tk.modo==='cat'?'Guardar por categorías':'Guardar '+n+' apuntes')+'</button><button class="btn ghost" onclick="cerrar()">Cancelar</button>';
   abrir();
 }
+/* La foto del ticket se guarda en una carpeta de Drive y cada apunte recuerda cuál es la suya (se hace en segundo plano) */
+async function guardarFotoMov(ids,nombre){
+  const im=lec&&lec.img;if(!im||!ids.length)return;
+  lec.img=null;
+  try{
+    const j=await llamar({accion:'guardarticket',imagen:im.b64,mime:im.mime,nombre});
+    if(!j.fileId)throw new Error('falta actualizar el script de Google');
+    ids.forEach(id=>updMov(id,{ticket:j.fileId}));render(true);
+  }catch(e){toast('No se pudo guardar la foto del ticket: '+(e.message||e))}
+}
 function guardarTicket(){
   const on=tk.items.filter(i=>i.on&&i.importe>0);
   if(!on.length){toast('No hay artículos marcados');return}
@@ -678,8 +690,9 @@ function guardarTicket(){
   let filas;
   if(tk.modo==='cat'){const g={};on.forEach(i=>g[i.cat]=r2((g[i.cat]||0)+i.importe));filas=Object.entries(g).map(([c,v])=>({cat:c,importe:v,nota:pre+catById(c).nombre}))}
   else filas=on.map(i=>({cat:i.cat,importe:i.importe,nota:pre+i.desc}));
-  filas.forEach((f,k)=>{const m=nuevoMov({fecha:tk.fecha,tipo:'gasto',importe:f.importe,categoria:f.cat,nota:f.nota,quien:yo,origen:'ticket',importKey:key+'#'+(k+1)});if(tk.cuenta)m.cuenta=tk.cuenta;movs.push(m)});
-  saveMovs();programarSync();cerrar();
+  const idsF=[];
+  filas.forEach((f,k)=>{const m=nuevoMov({fecha:tk.fecha,tipo:'gasto',importe:f.importe,categoria:f.cat,nota:f.nota,quien:yo,origen:'ticket',importKey:key+'#'+(k+1)});if(tk.cuenta)m.cuenta=tk.cuenta;movs.push(m);idsF.push(m.id)});
+  saveMovs();programarSync();guardarFotoMov(idsF,tk.fecha+' '+(tk.comercio||'Ticket')+' '+s.toFixed(2));cerrar();
   vm=vmDeFecha(tk.fecha);vista='movs';render();
   toast(filas.length+' apuntes guardados ('+eur(s)+')');
 }
@@ -782,7 +795,7 @@ function guardarCompra(){
   if(yaApuntado(cp.fecha,[cp.importe],7)&&!cp.igual){toast('Parece que ya está apuntado. Marca «Guardarlo igualmente» si es otro.');return}
   const m=nuevoMov({fecha:cp.fecha,tipo:cp.tipo,importe:cp.importe,categoria:cp.cat,nota:[cp.comercio,cp.nota].filter(Boolean).join(' · '),quien:yo,origen:'captura',importKey:'tk|'+cp.fecha+'|'+cp.importe.toFixed(2)+'#1'});
   if(cp.cuenta)m.cuenta=cp.cuenta;movs.push(m);
-  saveMovs();programarSync();cerrar();
+  saveMovs();programarSync();guardarFotoMov([m.id],cp.fecha+' '+(cp.comercio||'Compra')+' '+cp.importe.toFixed(2));cerrar();
   vm=vmDeFecha(cp.fecha);vista='movs';render();
   toast('Guardado: '+catById(m.categoria).nombre+' '+eur(m.importe),()=>{updMov(m.id,{borrado:true});render()});
 }
@@ -976,9 +989,10 @@ async function verTicket(id){
   $('#sheet').innerHTML='<h2>🧾 Ticket</h2><p class="muted small" id="tkEst">Pidiendo el ticket a Google…</p><div id="tkPags" style="max-height:68vh;overflow:auto;background:#fff;border-radius:10px"></div><button class="btn ghost" style="margin-top:10px" onclick="cerrar()">Cerrar</button>';
   abrir();
   try{
-    const j=await llamar({accion:'ticketpdf',id});
+    const j=await llamar(m&&m.ticket?{accion:'verticket',id:m.ticket}:{accion:'ticketpdf',id});
+    if(j.imagen&&!/pdf/i.test(String(j.mime))){const cont=$('#tkPags');if(!cont)return;cont.innerHTML='<img alt="Foto del ticket" style="width:100%;display:block" src="data:'+esc(j.mime||'image/jpeg')+';base64,'+j.imagen+'">';const t=$('#tkEst');if(t)t.textContent=m?m.nota+' · '+fechaCorta(m.fecha)+' · '+eur(m.importe):'';return}
     const lib=await cargarPdfjs();
-    const doc=await lib.getDocument({data:Uint8Array.from(atob(j.pdf),c=>c.charCodeAt(0)),isEvalSupported:false}).promise;
+    const doc=await lib.getDocument({data:Uint8Array.from(atob(j.pdf||j.imagen),c=>c.charCodeAt(0)),isEvalSupported:false}).promise;
     for(let n=1;n<=doc.numPages;n++){
       const cont=$('#tkPags');if(!cont)return;
       const pg=await doc.getPage(n),v0=pg.getViewport({scale:1}),w=Math.min(cont.clientWidth||340,700),v=pg.getViewport({scale:(w/v0.width)*2});
@@ -1065,7 +1079,7 @@ function habituales(y,m){
 function pendientesFijos(y,m,t){
   const list=deMes(y,m);
   return cfg.fijos.filter(f=>(!f.mes||f.mes===m+1)&&!list.some(x=>x.categoria===f.cat)&&!movs.some(x=>x.borrado&&x.id==='fx_'+f.cat+'_'+y+'-'+pad(m+1))).map(f=>{
-    const imp=f.porcentaje?redDec(t.ingreso*f.porcentaje/100):f.importe;
+    const imp=f.porcentaje?redDec(t.ingreso*f.porcentaje/100):impFijo(f,m);
     return Object.assign({},f,{sugerido:imp});
   });
 }
@@ -1523,6 +1537,8 @@ function ultimoImporteBanco(cat,antesDe){
   const ult=delBanco.reduce((a,x)=>String(x.fecha).slice(0,7)>a?String(x.fecha).slice(0,7):a,'');
   return r2(delBanco.filter(x=>String(x.fecha).startsWith(ult)).reduce((a,x)=>a+(x.tipo==='gasto'?x.importe:-x.importe),0));
 }
+/* Importe de un recibo fijo en el mes m (0-11): si tiene un importe distinto para ese mes (porMes), se usa ese */
+const impFijo=(f,m)=>(f.porMes&&f.porMes[m+1]!=null&&Number(f.porMes[m+1])>0)?Number(f.porMes[m+1]):f.importe;
 function generarFijos(){
   if(sync.url&&sync.clave&&!syncSesion)return; // primero hay que traer lo que ya hay en la hoja, para no repetir recibos
   const mc=mesContHoy(),y=mc.y,m=mc.m,ym=y+'-'+pad(m+1),cc=diaCierre();
@@ -1537,7 +1553,7 @@ function generarFijos(){
       return;
     }
     if(movs.some(x=>!x.borrado&&x.categoria===f.cat&&mesCont(x)===ym))return; // ya está (banco o a mano)
-    let imp=f.porcentaje?redDec(ingresos()*f.porcentaje/100):(f.auto==='ultimo'?(ultimoImporteBanco(f.cat,ym)??f.importe):f.importe);
+    let imp=f.porcentaje?redDec(ingresos()*f.porcentaje/100):(f.auto==='ultimo'?(ultimoImporteBanco(f.cat,ym)??f.importe):impFijo(f,m));
     if(!imp||imp<=0)return;
     const fy=(cc&&f.dia>=cc)?(m===0?y-1:y):y,fm=(cc&&f.dia>=cc)?(m===0?11:m-1):m,mv=nuevoMov({fecha:fy+'-'+pad(fm+1)+'-'+pad(Math.min(f.dia,new Date(fy,fm+1,0).getDate())),tipo:'gasto',importe:imp,categoria:f.cat,nota:(f.porcentaje?'Diezmo '+f.porcentaje+' %':'Recibo fijo')+AUTO,quien:yo,origen:'fijo'});
     mv.id=id;movs.push(mv);cambio=true;
