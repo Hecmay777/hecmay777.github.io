@@ -170,7 +170,9 @@ select{-webkit-appearance:none;appearance:none;background-image:url("data:image/
 a{color:var(--brand);text-underline-offset:2px}
 .mal{color:var(--neg)}
 .cn-hero{background:linear-gradient(150deg,#0f766e,#0b5d57)}.cn-hero.mal{background:linear-gradient(150deg,#b91c1c,#991b1b);color:#fff}.cn-hero small{opacity:1}
+.nav button{min-width:0;overflow-wrap:anywhere;hyphens:auto}.nav button:focus-visible,.sheet:focus-visible{outline:3px solid var(--brand);outline-offset:-3px}.sheet:focus{outline:none}
 .toast{bottom:calc(var(--navh,76px) + 12px)}.toast button{color:inherit;text-decoration:underline}
+@media (max-width:380px){.toast{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 10px)}}
 :root:not([data-theme="light"]) .toast{background:#2a2f2d;color:#f1f4f3}
 @media (prefers-color-scheme:light){.toast{background:var(--ink);color:#fff}}
 .nav button{opacity:1}.nav button.on::before{display:none}.nav button.on{font-weight:700}
@@ -203,8 +205,8 @@ a{color:var(--brand);text-underline-offset:2px}
 </div></nav>
 <script>/* Deja siempre hueco para la barra de abajo, mida lo que mida en cada móvil */
 (function(){const n=document.querySelector('.nav');if(!n)return;const f=()=>document.documentElement.style.setProperty('--navh',n.getBoundingClientRect().height+'px');f();if(window.ResizeObserver)new ResizeObserver(f).observe(n,{box:'border-box'});addEventListener('resize',f)})();</script>
-<div id="modal" class="modal hidden" onclick="if(event.target===this)cerrar()"><div class="sheet" id="sheet"></div></div>
-<div id="toast" class="toast hidden"></div>
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Ventana" onclick="if(event.target===this)cerrar()"><div class="sheet" id="sheet" tabindex="-1"></div></div>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
 <script>
 /* ===================== utilidades ===================== */
@@ -499,7 +501,7 @@ function ir(v){modoOrden=false;if(vista==='apuntar'&&$('#fImp'))leerForm();if(v!
 let modalH=false,modalPend=false,ignorePop=false;
 window.addEventListener('popstate',e=>{
   if(ignorePop){ignorePop=false;return}
-  if(modalH){modalH=false;modalPend=false;if(!$('#modal').classList.contains('hidden')){$('#modal').classList.add('hidden');return}}
+  if(modalH){modalH=false;modalPend=false;if(!$('#modal').classList.contains('hidden')){$('#modal').classList.add('hidden');bloquearFondo(false);try{if(focoPrevio&&document.contains(focoPrevio))focoPrevio.focus({preventScroll:true})}catch(e){}focoPrevio=null;return}}
   const st=e.state;
   if(!st||st.root){try{history.pushState(estadoNav(),'')}catch(x){}return}
   if(bienv)return;
@@ -519,7 +521,7 @@ function render(sinGuardarForm){
   document.querySelector('.nav').style.display='';
   try{generarFijos()}catch(e){}
   if(!sinGuardarForm&&vista==='apuntar'&&$('#fImp'))leerForm();
-  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===({consejos:'resumen',importar:'apuntar'}[vista]||vista)));
+  document.querySelectorAll('.nav button').forEach(b=>{const on=b.dataset.v===({consejos:'resumen',importar:'apuntar'}[vista]||vista);b.classList.toggle('on',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
   const f={apuntar:vApuntar,movs:vMovs,resumen:vResumen,consejos:vConsejos,importar:vImportar,ajustes:vAjustes}[vista];
   $('#app').innerHTML=f();
   estadoSync();pintarOjo();actGuardar();
@@ -544,6 +546,10 @@ async function cargarMercadona(mes){
    +(d.top&&d.top.length?'<h3>Lo que más gastas</h3>'+d.top.slice(0,6).map(p=>'<div class="bhead small" style="padding:4px 0"><span>'+(GRUPO_ICONO[p.grupo]||'📦')+' '+esc(p.producto)+' <span class="muted">×'+p.veces+'</span></span><span>'+eur(p.total)+'</span></div>').join(''):'')
    +(d.subidas&&d.subidas.length?'<h3>Ha subido de precio</h3>'+d.subidas.map(s=>'<div class="bhead small" style="padding:4px 0"><span>'+esc(s.producto)+'</span><span style="color:var(--neg)">'+eur(s.antes)+' → '+eur(s.ahora)+(s.kg?'/kg':'')+'</span></div>').join(''):'');
 }
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!$('#modal').classList.contains('hidden')){e.preventDefault();cerrar();return}
+  if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.getAttribute&&e.target.getAttribute('role')==='button'&&!/^(BUTTON|INPUT|A|SELECT|TEXTAREA)$/.test(e.target.tagName)){e.preventDefault();e.target.click()}
+});
 let toastT=null;
 function toast(msg,deshacer){
   const t=$('#toast');
@@ -552,13 +558,18 @@ function toast(msg,deshacer){
   if(deshacer)$('#tUndo').onclick=()=>{deshacer();t.classList.add('hidden')};
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.add('hidden'),deshacer?6000:3200);
 }
+let focoPrevio=null;
+function bloquearFondo(b){['#app','.nav','header.top'].forEach(s=>{const e=document.querySelector(s);if(e){if(b)e.setAttribute('inert','');else e.removeAttribute('inert')}})}
 function abrir(){
-  $('#modal').classList.remove('hidden');
+  if($('#modal').classList.contains('hidden'))focoPrevio=document.activeElement;
+  $('#modal').classList.remove('hidden');bloquearFondo(true);
+  setTimeout(()=>{const s=$('#sheet');if(s&&!s.contains(document.activeElement))s.focus({preventScroll:true})},30);
   if(modalPend){modalPend=false;return}
   if(!modalH){try{history.pushState(Object.assign(estadoNav(),{modal:1}),'');modalH=true}catch(e){}}
 }
 function cerrar(){
-  $('#modal').classList.add('hidden');
+  $('#modal').classList.add('hidden');bloquearFondo(false);
+  try{if(focoPrevio&&document.contains(focoPrevio))focoPrevio.focus({preventScroll:true})}catch(e){}focoPrevio=null;
   if(modalH&&!modalPend){modalPend=true;setTimeout(()=>{if(modalPend){modalPend=false;modalH=false;ignorePop=true;try{history.back()}catch(e){ignorePop=false}}},0)}
 }
 function monthNav(){
@@ -1407,7 +1418,7 @@ function seccionCuentas(){
      +(cuentasVis().length>1?'<button class="x" style="font-size:15px;margin-top:6px" onclick="quitarCuenta(\''+id+'\')">Quitar esta cuenta</button>':'')+'</div>'}).join('')
    +'<button class="btn ghost" onclick="nuevaCuenta()">+ Añadir cuenta</button></section>';
 }
-function setCuenta(id,k,v){const c=cfg.cuentas.find(x=>x.id===id);if(!c)return;v=k==='nombre'?String(v).trim()||c.nombre:v;c[k]=v;saveCfg();render()}
+function setCuenta(id,k,v){const c=cfg.cuentas.find(x=>x.id===id);if(!c)return;v=k==='nombre'?String(v).trim()||c.nombre:v;c[k]=v;saveCfg();if(!/^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement||{}).tagName||''))render()}
 function nuevaCuenta(datos){
   const c=Object.assign({id:'k_'+uid().slice(0,8),nombre:'Cuenta nueva',tipo:'dia',banco:'otro',persona:'',saldo:null,fecha:'',ts:0},datos||{});
   cfg.cuentas.push(c);saveCfg();render();return c;
@@ -1681,12 +1692,13 @@ function informeMes(){
   const tabla=(tit,g,total,conPres)=>{const f=filas(g);if(!f.length)return '';const max=Math.max(1,...f.map(x=>x.v));
     return '<h2>'+tit+'<span>'+eur(total)+'</span></h2><table>'+f.map(x=>'<tr><td>'+esc(x.c.nombre)+'</td><td class="b"><i style="width:'+Math.max(1,Math.round(x.v/max*100))+'%"></i></td><td class="n">'+eur(x.v)+'</td>'+(conPres?'<td class="p">'+(x.c.presupuesto?'de '+eur0(x.c.presupuesto):'')+'</td>':'')+'</tr>').join('')+'</table>'};
   const pct=t.ingreso>0?Math.round(t.ahorro/t.ingreso*100):null;
+  const enCurso=y===mesContHoy().y&&m===mesContHoy().m;
   let d=document.getElementById('informe');if(!d){d=document.createElement('div');d.id='informe';document.body.appendChild(d)}
   d.innerHTML='<header><div><h1>Cuentas de Casa</h1><p>Informe de '+MESES[m].toLowerCase()+' de '+y+(pe?' · del '+fechaCorta(pe.ini)+' al '+fechaCorta(pe.fin):'')+'</p></div><p class="f">Hecho el '+fechaCorta(hoy())+'</p></header>'
-   +'<div class="k"><div><small>Ingresos</small><b>'+eur(t.ingreso)+'</b></div><div><small>Gastos</small><b>'+eur(t.gastos)+'</b></div><div><small>Ahorro</small><b>'+eur(t.ahorro)+'</b>'+(pct!==null?'<small>'+pct+' % de los ingresos</small>':'')+'</div></div>'
+   +'<div class="k"><div><small>Ingresos</small><b>'+eur(t.ingreso)+'</b></div><div><small>Gastos</small><b>'+eur(t.gastos)+'</b></div><div><small>'+(enCurso?'Ahorro hasta hoy':'Ahorro')+'</small><b>'+eur(t.ahorro)+'</b>'+(pct!==null?'<small>'+pct+' % de los ingresos</small>':'')+'</div></div>'
    +(tp.gastos>0?'<p class="c">El mes anterior los gastos fueron '+eur(tp.gastos)+' ('+(t.gastos>tp.gastos?'este mes '+eur(t.gastos-tp.gastos)+' más':'este mes '+eur(tp.gastos-t.gastos)+' menos')+').</p>':'')
    +tabla('Gastos del día a día','variable',t.variable,true)+tabla('Recibos fijos','fijo',t.fijo)+tabla('Ingresos','ingreso',t.ingreso)
-   +'<p class="pie">Los traspasos entre cuentas y el dinero pasado a ahorro no cuentan como gasto. Cuentas de Casa · © 2026 Héctor Mayol.</p>';
+   +''+(enCurso?'<p class="c">El mes aún no ha terminado: son las cifras de hoy. La previsión a fin de mes está en la pantalla Resumen.</p>':'')+'<p class="pie">Los traspasos entre cuentas y el dinero pasado a ahorro no cuentan como gasto. Cuentas de Casa · © 2026 Héctor Mayol.</p>';
   setTimeout(()=>window.print(),80);
 }
 /* Apunta solos los recibos fijos del mes en curso (mismo identificador en los dos móviles, así no se duplican) */
