@@ -1,0 +1,55 @@
+name: Compilar app Garmin (Marcador Padel)
+
+on:
+  push:
+    paths:
+      - 'garmin-marcador/**'
+      - '.github/workflows/garmin-marcador.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/matco/connectiq-tester:latest
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilar para Forerunner 245 Music
+        shell: bash
+        run: |
+          set -e
+          MC=$(find / -name monkeyc -type f -not -path '/proc/*' 2>/dev/null | head -1)
+          DEV=$(find / -type d -name fr245m -not -path '/proc/*' 2>/dev/null | head -1)
+          echo "monkeyc: $MC"
+          echo "device:  $DEV"
+          test -n "$MC" && test -n "$DEV"
+          # monkeyc busca los dispositivos en $HOME/.Garmin/ConnectIQ/Devices
+          export HOME=$(dirname "$(dirname "$(dirname "$(dirname "$DEV")")")")
+          echo "HOME: $HOME"
+          command -v openssl >/dev/null || (apt-get update -qq && apt-get install -y -qq openssl)
+          openssl genrsa -out /tmp/key.pem 4096 2>/dev/null
+          openssl pkcs8 -topk8 -inform PEM -outform DER -in /tmp/key.pem -out /tmp/key.der -nocrypt
+          mkdir -p out
+          cd garmin-marcador
+          "$MC" -d fr245m -f monkey.jungle -o ../out/marcador-padel-fr245m.prg -y /tmp/key.der -l 0 -w
+          "$MC" -d fr245 -f monkey.jungle -o ../out/marcador-padel-fr245.prg -y /tmp/key.der -l 0 -w
+          ls -l ../out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marcador-padel
+          path: out/*.prg
+
+      - name: Publicar descarga
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: garmin-marcador
+          name: Marcador Padel para Garmin
+          body: App del reloj (Forerunner 245 / 245 Music). Copiar el archivo .prg a la carpeta GARMIN/APPS del reloj.
+          files: out/*.prg
+          target_commitish: ${{ github.sha }}

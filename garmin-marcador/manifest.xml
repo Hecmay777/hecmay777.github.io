@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application entry="MarcadorApp" id="59f2b8463f164a82aaa6ef29499f9ceb" launcherIcon="@Drawables.LauncherIcon" minSdkVersion="3.1.0" name="@Strings.AppName" type="watch-app">
+        <iq:products>
+            <iq:product id="fr245m"/>
+            <iq:product id="fr245"/>
+        </iq:products>
+        <iq:permissions/>
+        <iq:languages/>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>
