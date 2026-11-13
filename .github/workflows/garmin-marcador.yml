@@ -45,6 +45,47 @@ jobs:
           name: marcador-padel
           path: out/*.prg
 
+      - name: Probar en el simulador (capturas)
+        continue-on-error: true
+        shell: bash
+        run: |
+          export HOME=/root
+          TS=$(find / -name 'tester.sh' -not -path '/proc/*' 2>/dev/null | head -1); echo "tester: $TS"; cat "$TS" || true
+          apt-get update -qq >/dev/null 2>&1 || true
+          apt-get install -y -qq xvfb xdotool imagemagick x11-utils >/dev/null 2>&1 || true
+          mkdir -p shots
+          Xvfb :9 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+          export DISPLAY=:9
+          sleep 3
+          /connectiq/bin/simulator >/tmp/sim.log 2>&1 &
+          sleep 12
+          /connectiq/bin/monkeydo out/marcador-padel-fr245m.prg fr245m >/tmp/run.log 2>&1 &
+          sleep 20
+          shot() { import -window root "shots/$1.png" || true; }
+          key() { xdotool key --delay 400 "$@" || true; sleep 1; }
+          xdotool search --name . getwindowname %@ 2>/dev/null | sort | uniq | head -20 || true
+          WID=$(xdotool search --name 'Connect IQ' 2>/dev/null | tail -1); echo "ventana: $WID"
+          [ -n "$WID" ] && xdotool windowactivate "$WID" 2>/dev/null; [ -n "$WID" ] && xdotool windowfocus "$WID" 2>/dev/null
+          shot 01-inicio
+          key Up Up Up Down
+          shot 02-puntos
+          key Up
+          shot 03-juego
+          key Return
+          shot 04-menu
+          key Escape
+          key Escape
+          shot 05-deshacer
+          echo '--- run.log'; tail -30 /tmp/run.log || true
+          echo '--- sim.log'; tail -15 /tmp/sim.log || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capturas-simulador
+          path: shots/*.png
+          if-no-files-found: ignore
+
       - name: Publicar descarga
         uses: softprops/action-gh-release@v2
         with:
