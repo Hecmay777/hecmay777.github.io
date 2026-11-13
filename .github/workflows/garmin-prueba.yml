@@ -1,0 +1,88 @@
+name: Prueba de app Garmin
+
+on:
+  push:
+    paths:
+      - 'garmin-prueba/**'
+      - '.github/workflows/garmin-prueba.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/matco/connectiq-tester:latest
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilar para Forerunner 245 Music
+        shell: bash
+        run: |
+          set -e
+          export HOME=/root
+          openssl genrsa -out /tmp/key.pem 4096 2>/dev/null
+          openssl pkcs8 -topk8 -inform PEM -outform DER -in /tmp/key.pem -out /tmp/key.der -nocrypt
+          mkdir -p out
+          cd garmin-prueba
+          /connectiq/bin/monkeyc -d fr245m -f monkey.jungle -o ../out/kettlebell-fr245m.prg -y /tmp/key.der -l 0 -w
+          ls -l ../out/*.prg
+
+      - name: Probar en el simulador (capturas)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e +o pipefail
+          export HOME=/root
+          apt-get update -qq >/dev/null 2>&1
+          apt-get install -y -qq xvfb xdotool imagemagick x11-utils git >/dev/null 2>&1
+          mkdir -p shots
+          Xvfb :9 -screen 0 1280x1024x24 >/dev/null 2>&1 &
+          export DISPLAY=:9
+          sleep 3
+          /connectiq/bin/simulator >/tmp/sim.log 2>&1 &
+          sleep 12
+          /connectiq/bin/monkeydo out/kettlebell-fr245m.prg fr245m >/tmp/run.log 2>&1 &
+          sleep 20
+          shot() { import -window root -crop 446x654+0+0 "shots/$1.png"; }
+          key() { xdotool key --delay 500 "$@"; sleep 1; }
+          WID=$(xdotool search --name 'CIQ Simulator' 2>/dev/null | tail -1)
+          [ -n "$WID" ] && xdotool windowactivate "$WID" 2>/dev/null; [ -n "$WID" ] && xdotool windowfocus "$WID" 2>/dev/null
+          shot 01-inicio
+          key Down Down Down Down Down Down Down
+          shot 02-otra-sesion
+          key Up Up Up Up Up Up
+          shot 03-s3d2
+          key Return
+          sleep 2
+          shot 04-paso-tiempo
+          key Down
+          shot 05-paso-reps
+          key Return
+          shot 06-siguiente
+          key Down Down Down Down Down Down Down Down
+          shot 07-serie
+          key Return
+          sleep 3
+          shot 08-descanso
+          key Return
+          sleep 1
+          shot 09-pausa
+          for i in $(seq 1 60); do xdotool key --delay 120 Down; done
+          sleep 2
+          shot 10-final
+          echo '--- run.log'; tail -40 /tmp/run.log
+          echo '--- sim.log'; tail -8 /tmp/sim.log
+
+      - name: Guardar capturas
+        continue-on-error: true
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          cd shots && git init -q && git config user.email "actions@github.com" && git config user.name "github-actions"
+          git add -A && git commit -q -m "Capturas del simulador" && git push -q --force "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" HEAD:refs/heads/garmin-capturas

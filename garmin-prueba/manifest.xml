@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:application entry="KbApp" id="27d95ea9b9684d0abcbe504a059db545" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.0.0" name="@Strings.AppName" type="watch-app" version="1.0.0">
+        <iq:products>
+            <iq:product id="fr245m"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Fit"/>
+        </iq:permissions>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>
