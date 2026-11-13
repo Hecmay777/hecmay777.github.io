@@ -80,17 +80,6 @@ jobs:
           echo '--- run.log'; tail -30 /tmp/run.log || true
           echo '--- sim.log'; tail -15 /tmp/sim.log || true
 
-      - name: Guardar capturas en una rama temporal
-        continue-on-error: true
-        shell: bash
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set +e
-          command -v git >/dev/null || apt-get install -y -qq git >/dev/null 2>&1
-          cd shots && git init -q && git config user.email "actions@github.com" && git config user.name "github-actions"
-          git add -A && git commit -q -m "Capturas del simulador" && git push -q --force "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" HEAD:refs/heads/garmin-capturas
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
