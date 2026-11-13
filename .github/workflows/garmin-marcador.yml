@@ -49,8 +49,8 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
+          set +e +o pipefail
           export HOME=/root
-          TS=$(find / -name 'tester.sh' -not -path '/proc/*' 2>/dev/null | head -1); echo "tester: $TS"; cat "$TS" || true
           apt-get update -qq >/dev/null 2>&1 || true
           apt-get install -y -qq xvfb xdotool imagemagick x11-utils >/dev/null 2>&1 || true
           mkdir -p shots
@@ -64,8 +64,9 @@ jobs:
           shot() { import -window root "shots/$1.png" || true; }
           key() { xdotool key --delay 400 "$@" || true; sleep 1; }
           xdotool search --name . getwindowname %@ 2>/dev/null | sort | uniq | head -20 || true
-          WID=$(xdotool search --name 'Connect IQ' 2>/dev/null | tail -1); echo "ventana: $WID"
+          WID=$(xdotool search --name 'CIQ Simulator' 2>/dev/null | tail -1); echo "ventana: $WID"
           [ -n "$WID" ] && xdotool windowactivate "$WID" 2>/dev/null; [ -n "$WID" ] && xdotool windowfocus "$WID" 2>/dev/null
+          xdotool getwindowgeometry "$WID" || true
           shot 01-inicio
           key Up Up Up Down
           shot 02-puntos
