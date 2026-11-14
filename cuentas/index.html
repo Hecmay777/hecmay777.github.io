@@ -530,18 +530,24 @@ function render(sinGuardarForm){
 
 /* ===================== Productos de Mercadona (desde la hoja de Google) ===================== */
 const GRUPO_ICONO={'Carne y pescado':'🥩','Fruta y verdura':'🥦','Lácteos y huevos':'🥛','Pan y bollería':'🍞','Despensa':'🥫','Café':'☕','Bebidas':'🥤','Limpieza y hogar':'🧽','Higiene':'🧴','Suplementos':'💊','Mascotas':'🐾','Otros':'📦'};
-let mercaCache={};
+let mercaCache={},mercaSel='Todas',mercaT=[];
+function mercaPick(k){mercaSel=k<0?'Todas':mercaT[k];cargarMercadona(vm.y+'-'+pad(vm.m+1))}
+function chipsTiendas(d){
+  mercaT=Object.keys(d.tiendas||{}).sort((a,z)=>d.tiendas[z]-d.tiendas[a]);
+  if(mercaT.length<2&&mercaSel==='Todas')return '';
+  return '<div class="seg" style="margin:6px 0 10px;flex-wrap:wrap"><button class="'+(mercaSel==='Todas'?'on':'')+'" onclick="mercaPick(-1)">Todas</button>'+mercaT.map((t,k)=>'<button class="'+(mercaSel===t?'on':'')+'" onclick="mercaPick('+k+')">'+esc(t)+'</button>').join('')+'</div>';
+}
 async function cargarMercadona(mes){
-  let d=mercaCache[mes];
+  const ck=mes+'|'+mercaSel;let d=mercaCache[ck];
   if(!d){
-    try{d=await llamar({accion:'mercadona',mes});mercaCache[mes]=d}
-    catch(e){const b=$('#mercaBox');if(b)b.innerHTML='<h2>Dentro de Mercadona</h2><p class="muted small">No se han podido cargar los productos ahora.</p>';return}
+    try{d=await llamar({accion:'mercadona',mes,tienda:mercaSel});mercaCache[ck]=d}
+    catch(e){const b=$('#mercaBox');if(b)b.innerHTML='<h2>Lo que compráis</h2><p class="muted small">No se han podido cargar los productos ahora.</p>';return}
   }
   const b=$('#mercaBox');if(!b||vm.y+'-'+pad(vm.m+1)!==mes)return;
   const grupos=Object.entries(d.grupos||{}).sort((a,z)=>z[1]-a[1]);
-  if(!grupos.length){b.innerHTML='<h2>Dentro de Mercadona</h2><p class="muted small">Aún no hay productos leídos de los tickets de este mes.</p>';return}
+  if(!grupos.length){b.innerHTML='<h2>Lo que compráis</h2>'+chipsTiendas(d)+'<p class="muted small">Aún no hay productos leídos de los tickets de este mes.</p>';return}
   const tot=grupos.reduce((a,g)=>a+g[1],0),max=grupos[0][1];
-  b.innerHTML='<h2>Dentro de Mercadona</h2><p class="muted small" style="margin-top:-6px">'+d.tickets+' tickets · '+eur(tot)+'</p>'
+  b.innerHTML='<h2>Lo que compráis</h2>'+chipsTiendas(d)+'<p class="muted small" style="margin-top:-6px">'+d.tickets+' tickets · '+eur(tot)+'</p>'
    +grupos.map(([g,v])=>'<div class="bline"><div class="bhead"><span>'+(GRUPO_ICONO[g]||'📦')+' '+esc(g)+'</span><span><b>'+eur(v)+'</b> <small class="muted">'+Math.round(v/tot*100)+' %</small></span></div><div class="bar"><i style="width:'+(v/max*100)+'%"></i></div></div>').join('')
    +(d.top&&d.top.length?'<h3>Lo que más gastas</h3>'+d.top.slice(0,6).map(p=>'<div class="bhead small" style="padding:4px 0"><span>'+(GRUPO_ICONO[p.grupo]||'📦')+' '+esc(p.producto)+' <span class="muted">×'+p.veces+'</span></span><span>'+eur(p.total)+'</span></div>').join(''):'')
    +(d.subidas&&d.subidas.length?'<h3>Ha subido de precio</h3>'+d.subidas.map(s=>'<div class="bhead small" style="padding:4px 0"><span>'+esc(s.producto)+'</span><span style="color:var(--neg)">'+eur(s.antes)+' → '+eur(s.ahora)+(s.kg?'/kg':'')+'</span></div>').join(''):'');
@@ -558,7 +564,7 @@ function toast(msg,deshacer){
   if(deshacer)$('#tUndo').onclick=()=>{deshacer();t.classList.add('hidden')};
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.add('hidden'),deshacer?6000:3200);
 }
-const APP_V='2026-11-12-v11';
+const APP_V='2026-11-14-v12';
 let focoPrevio=null;
 function bloquearFondo(b){['#app','.nav','header.top'].forEach(s=>{const e=document.querySelector(s);if(e){if(b)e.setAttribute('inert','');else e.removeAttribute('inert')}})}
 function abrir(){
@@ -669,12 +675,12 @@ function abrirLector(){
   abrir();
 }
 /* Reduce la foto (1800 px, JPEG) para que suba rápido y el lector de Google la entienda bien */
-async function reducirImagen(f){
+async function reducirImagen(f,max){
   const bm=await createImageBitmap(f,{imageOrientation:'from-image'});
-  const k=Math.min(1,1800/Math.max(bm.width,bm.height)),c=document.createElement('canvas');
+  const k=Math.min(1,(max||1800)/Math.max(bm.width,bm.height)),c=document.createElement('canvas');
   c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);
   const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(bm,0,0,c.width,c.height);
-  return c.toDataURL('image/jpeg',0.85).split(',')[1];
+  return c.toDataURL('image/jpeg',0.9).split(',')[1];
 }
 function leerComoBase64(f){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ko(new Error('No se pudo abrir el archivo'));r.readAsDataURL(f)})}
 async function leerImagen(f){
@@ -684,7 +690,7 @@ async function leerImagen(f){
   if(pdf&&f.size>6e6){toast('El PDF pesa demasiado (máximo 6 MB). Prueba con una captura.');return}
   $('#sheet').innerHTML='<h2>Leyendo…</h2><p class="muted">Suele tardar unos segundos.</p>';abrir();
   let j,b64;
-  try{b64=pdf?await leerComoBase64(f):await reducirImagen(f);j=await llamar({accion:'ocr',imagen:b64,mime:pdf?'application/pdf':'image/jpeg'})}
+  try{b64=pdf?await leerComoBase64(f):await reducirImagen(f,2600);j=await llamar({accion:'ocr',imagen:b64,mime:pdf?'application/pdf':'image/jpeg'})}
   catch(e){cerrar();toast('No he podido leer el archivo: '+(e.message||e));return}
   if(typeof j.texto!=='string'){cerrar();toast('Falta actualizar el script de Google para leer imágenes');return}
   lec={texto:j.texto,srv:j.ticket,img:{b64,mime:pdf?'application/pdf':'image/jpeg'}};cp=null;
@@ -713,7 +719,7 @@ function comercioDeTicket(t){
 }
 /* Ticket de un comercio cualquiera. El lector de Google a veces separa descripción e importe en líneas distintas: se admiten las dos formas */
 function parseGenerico(texto){
-  const SKIP=/TOTAL|SUBTOTAL|IVA\b|I\.V\.A|BASE|CUOTA|ENTREGADO|CAMBIO|EFECTIVO|TARJETA|VISA|MASTERCARD|A PAGAR|FACTURA|TICKET|NIF|CIF|TEL[EÉ]F|FECHA|HORA|CAJA|OPERADOR|GRACIAS|PUNTOS|DESCUENTO|AHORRO|ENV[IÍ]O|^ART[IÍ]CULOS|GASTOS DE|PEDIDO|^DESCRIPCI|^P\. ?UNIT|^IMPORTE|^CANT|^PRECIO|\bOP:/i;
+  const SKIP=/TOTAL|SUBTOTAL|IVA\b|I\.V\.A|BASE|CUOTA|ENTREGADO|CAMBIO|EFECTIVO|TARJETA|VISA|MASTERCARD|A PAGAR|FACTURA|TICKET|NIF|CIF|TEL[EÉ]F|FECHA|HORA|^(?:N[.º°]?\s*)?CAJA\b|CAJA\s*:|CAJER[AO]|OPERADOR|GRACIAS|PUNTOS|DESCUENTO|AHORRO|ENV[IÍ]O|^ART[IÍ]CULOS|GASTOS DE|PEDIDO|^DESCRIPCI|^P\. ?UNIT|^IMPORTE|^CANT|^PRECIO|\bOP:/i;
   const L=String(texto).split(/\r?\n/).map(l=>l.replace(/\u00a0/g,' ').trim()).filter(Boolean);
   const P='-?\\d{1,4}[.,]\\d{2}(?!\\d)',letras=/[A-Za-zÁÉÍÓÚÑáéíóúñ]{2}/;
   const soloPrecios=new RegExp('^(?:'+P+'\\s*(?:€\\/?\\s*kg|kg|€|EUR|[A-Z])?\\s*){1,3}$','i');
@@ -790,6 +796,15 @@ async function guardarFotoMov(ids,nombre){
     ids.forEach(id=>updMov(id,{ticket:j.fileId}));render(true);
   }catch(e){toast('No se pudo guardar la foto del ticket: '+(e.message||e))}
 }
+/* Los productos del ticket se guardan aparte (con su grupo y su tienda) para ver en qué se va el gasto */
+async function guardarProductos(items,key,movId,fecha,tienda){
+  if(!sync.url||!sync.clave)return;
+  try{
+    const j=await llamar({accion:'productos',fecha,tienda:tienda||'Otra tienda',ticket:key,movId,quien:yo,items:items.map(i=>({producto:i.desc,importe:i.importe}))});
+    if(!j||!j.ok)throw new Error((j&&j.error)||'falta actualizar el script de Google');
+    mercaCache={};
+  }catch(e){toast('No se han podido guardar los productos del ticket: '+(e.message||e))}
+}
 function guardarTicket(){
   const on=tk.items.filter(i=>i.on&&i.importe>0);
   if(!on.length){toast('No hay artículos marcados');return}
@@ -800,7 +815,7 @@ function guardarTicket(){
   else filas=on.map(i=>({cat:i.cat,importe:i.importe,nota:pre+i.desc}));
   const idsF=[];
   filas.forEach((f,k)=>{const m=nuevoMov({fecha:tk.fecha,tipo:'gasto',importe:f.importe,categoria:f.cat,nota:f.nota,quien:yo,origen:'ticket',importKey:key+'#'+(k+1)});if(tk.cuenta)m.cuenta=tk.cuenta;movs.push(m);idsF.push(m.id)});
-  saveMovs();programarSync();guardarFotoMov(idsF,tk.fecha+' '+(tk.comercio||'Ticket')+' '+s.toFixed(2));cerrar();
+  saveMovs();programarSync();guardarFotoMov(idsF,tk.fecha+' '+(tk.comercio||'Ticket')+' '+s.toFixed(2));guardarProductos(on,key,idsF[0],tk.fecha,tk.comercio);cerrar();
   vm=vmDeFecha(tk.fecha);vista='movs';render();
   toast(filas.length+' apuntes guardados ('+eur(s)+')');
 }
@@ -1675,7 +1690,7 @@ function resumenMes(){
      const dif=v-prev;const comp=prev>0.5?(dif>0.5?'▲ '+eur0(dif):dif<-0.5?'▼ '+eur0(-dif):'='):'';
      return '<div class="bline" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\''+c.id+'\')" aria-label="Ver los movimientos de '+esc(c.nombre)+'"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+'</span><span><b>'+eur(v)+'</b>'+(p?' <small class="muted">de '+eur0(p)+'</small>':'')+' <small class="muted">›</small></span></div><div class="bar"><i style="width:'+pct+'%;background:'+col+'"></i></div>'+(comp?'<small class="muted">vs mes anterior: '+comp+'</small>':'')+'</div>';
   }
-  if(sync.url&&sync.clave&&(t.cat.super||0)>0)h+='<section class="card" id="mercaBox"><h2>Dentro de Mercadona</h2><p class="muted small">Cargando productos…</p></section>';
+  if(sync.url&&sync.clave&&(t.cat.super||0)>0)h+='<section class="card" id="mercaBox"><h2>Lo que compráis</h2><p class="muted small">Cargando productos…</p></section>';
   const fijos=cfg.cats.filter(c=>c.grupo==='fijo'&&t.cat[c.id]);
   h+='<section class="card"><h2>Recibos fijos</h2><p class="muted small" style="margin-top:-6px">Total '+eur(t.fijo)+'</p>'+(fijos.length?fijos.map(c=>'<div class="bline" role="button" tabindex="0" style="cursor:pointer" onclick="verCat(\''+c.id+'\')" aria-label="Ver los movimientos de '+esc(c.nombre)+'"><div class="bhead"><span>'+icoCat(c,'xs')+esc(c.nombre)+'</span><span>'+eur(t.cat[c.id])+' <small class="muted">›</small></span></div></div>').join(''):'<p class="muted small">Ninguno apuntado este mes.</p>')+'</section>';
   const ings=cfg.cats.filter(c=>c.grupo==='ingreso'&&t.cat[c.id]);
