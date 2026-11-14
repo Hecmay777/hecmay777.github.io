@@ -1,5 +1,6 @@
 using Toybox.WatchUi;
 using Toybox.Attention;
+using Toybox.System;
 
 // Botones: ARRIBA = punto nosotros, ABAJO = punto ellos, ATRAS = deshacer, START = menu.
 class MarcadorDelegate extends WatchUi.BehaviorDelegate {
@@ -63,6 +64,7 @@ class MarcadorDelegate extends WatchUi.BehaviorDelegate {
         menu.addItem(new WatchUi.ToggleMenuItem("Tie-break a 6-6", null, :tb, c["tieBreak"], null));
         menu.addItem(new WatchUi.MenuItem("Sets", setsLabel(), :sets, null));
         menu.addItem(new WatchUi.MenuItem("Partido nuevo", "ATRAS lo recupera", :nuevo, null));
+        menu.addItem(new WatchUi.MenuItem("Salir de la app", "el partido se guarda", :salir, null));
         WatchUi.pushView(menu, new MarcadorMenuDelegate(), WatchUi.SLIDE_UP);
     }
 }
@@ -84,6 +86,9 @@ class MarcadorMenuDelegate extends WatchUi.Menu2InputDelegate {
         if (id == :srv) {
             m.toggleServer();
             WatchUi.popView(WatchUi.SLIDE_DOWN);
+        } else if (id == :salir) {
+            m.save();
+            System.exit();
         } else if (id == :nuevo) {
             m.newMatch();
             WatchUi.popView(WatchUi.SLIDE_DOWN);
