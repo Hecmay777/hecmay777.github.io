@@ -103,6 +103,21 @@ a{color:inherit}
 .tabs{display:flex;gap:8px;margin-bottom:14px}
 textarea{width:100%;height:120px;background:var(--card2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:10px;font:12px monospace}
 @media (max-width:600px){body{padding:14px 12px 70px}.top h1{font-size:26px}}
+.stile.flow{border-color:#7c5cf0;background:#1a1730}
+.stile.flow:hover{border-color:#a48bff}
+.ftag{display:block;font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.08em;color:#b9a6ff;text-transform:uppercase;margin-top:4px}
+.fbar{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.fbar .btn.on{background:#7c5cf0;color:#fff;border-color:#7c5cf0}
+.fcard{background:#1a1730;border:1px solid #7c5cf0;border-radius:16px;padding:16px 18px;margin:14px 0}
+.fcard h3{margin-bottom:6px}
+.mu{color:var(--mu);font-size:14px;line-height:1.5}
+.fi{margin:10px 0 4px;font-size:14.5px;line-height:1.5}.fi b{display:block;font-size:16px;color:#b9a6ff}.fi .k{color:var(--mu);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin-right:6px}
+.fv{margin:6px 0 14px}.fv .vl{display:inline-block;margin-bottom:6px}
+.fnote{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:10px;color:var(--tx);padding:10px 12px;font:inherit;font-size:14px}
+.fl{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.fxr{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.fxr:first-child{border-top:0}
+.fxn{min-width:26px;text-align:center;font-size:20px}
+.btn:disabled{opacity:.4}
 </style>
 </head>
 <body>
@@ -114,6 +129,25 @@ const DATA={"progs":[{"id":"primal","name":"Primal","sub":"Iniciación","pres":[
 const COLORS={primal:'#ff7a3d',ring:'#35c2ff',unb:'#b36bff',aurum:'#f5c542',elite:'#ff3d5a'};
 const TYPES={wu:'Calentamiento',cd:'Movilidad',interval_repetitions:'Intervalo a repeticiones',interval_repetitions_with_pause:'Series con pausa',tabata:'Tábata',super_series:'Superserie',to_the_one:'To the One',paleo_run:'Paleo run',spartan_race:'Spartan race'};
 const REST=5968;
+COLORS.flow='#7c5cf0';
+const FLOWS={5654:'A',6032:'B',6033:'C',6034:'D',6035:'E'},FLOWID={A:5654,B:6032,C:6033,D:6034,E:6035};
+const FLOWINFO={
+ A:{m:'Cuádriceps, glúteos, abductores y abdominales',x:'No incluye trabajo de tríceps. El programa la usa en las sesiones 5 y 10.'},
+ B:{m:'Cuádriceps, glúteos, abductores, abdominales y tríceps',x:'Añade el tríceps respecto a la A. El programa la usa en las sesiones 15 y 20.'},
+ C:{m:'Cuádriceps, glúteos, abductores, abdominales y tríceps',x:'Mismos músculos que la B. El programa la usa en las sesiones 25 y 30.'},
+ D:{m:'Cuádriceps, glúteos, abductores, abdominales y tríceps',x:'Mismos músculos que la B y la C. El programa la usa en las sesiones 35 y 40.'},
+ E:{m:'Cuádriceps, glúteos, abductores, abdominales y tríceps',x:'Mismos músculos que la B, C y D. La última del programa: sesiones 45 y 50.'}};
+const FLOWJ='Hombros, cadera, tobillos, rodillas, muñecas y codos';
+const isFlow=s=>!!(s&&s.b&&s.b[0]&&s.b[0].s.some(x=>FLOWS[x[0]]));
+const flowOf=s=>{const x=s.b[0].s.find(x=>FLOWS[x[0]]);return x?FLOWS[x[0]]:null};
+const flowRounds=s=>s.b[0].s.filter(x=>FLOWS[x[0]]).length;
+let FN={};try{FN=JSON.parse(localStorage.getItem('flow_notes_v1')||'{}')}catch(e){FN={}}
+function saveFN(l,v){FN[l]=v;try{localStorage.setItem('flow_notes_v1',JSON.stringify(FN))}catch(e){}}
+let FX={A:0,B:0,C:0,D:0,E:0},FXOnly=false;
+function fxSet(l,d){FX[l]=Math.max(0,Math.min(10,FX[l]+d));render()}
+function fxPreset(o){FX={A:0,B:0,C:0,D:0,E:0};Object.assign(FX,o);render()}
+function flowInfoHTML(l){const f=FLOWINFO[l];return `<div class="fi"><b>Flow ${l}</b><div><span class="k">Músculos</span> ${f.m}</div><div><span class="k">Articulaciones que moviliza</span> ${FLOWJ}</div><div class="mu">${f.x}</div></div>`}
+function flowTable(){return ['A','B','C','D','E'].map(l=>flowInfoHTML(l)+`<div class="fv">${EX[FLOWID[l]]&&EX[FLOWID[l]].v?`<a class="vl" href="${esc(EX[FLOWID[l]].v)}" target="_blank" rel="noopener">▶ Ver vídeo del Flow ${l}</a>`:''}<input class="fnote" placeholder="Mi nota sobre el Flow ${l} (cómo se siente, qué zona trabaja…)" value="${esc(FN[l]||'')}" oninput="saveFN('${l}',this.value)"></div>`).join('')}
 const EX=DATA.ex;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -142,9 +176,10 @@ function render(){
       const d=P.ses.filter(s=>isDone(P.id,s.n)).length,n=nextSes(P);
       return `<button class="pcard" style="--c:${COLORS[P.id]}" onclick="openP('${P.id}')"><span class="tag">${esc(P.sub)}</span><h2>${esc(P.name)}</h2>
       <div class="bar"><i style="width:${d/P.ses.length*100}%"></i></div>
-      <div class="sub">${d} de ${P.ses.length} sesiones hechas${n?' · siguiente: sesión '+esc(n.n):' · ¡completado!'}</div></button>`}).join('')+`</div>`;
+      <div class="sub">${d} de ${P.ses.length} sesiones hechas${n?' · siguiente: sesión '+esc(n.n):' · ¡completado!'}</div></button>`}).join('')+`<button class="pcard" style="--c:#7c5cf0" onclick="openP('flow')"><span class="tag">Extra · descanso activo</span><h2>🌀 Flow</h2><div class="sub">Las 10 sesiones de Flow del programa, qué trabaja cada flow y un creador para encadenar varios en una sola sesión.</div></button></div>`;
     return;
   }
+  if(view.p==='flow'){renderFlow();return}
   const P=DATA.progs.find(x=>x.id===view.p);
   a.style.setProperty('--c',COLORS[P.id]);
   if(view.s==null){
@@ -154,7 +189,8 @@ function render(){
     <div class="bar"><i style="width:${d/P.ses.length*100}%"></i></div>
     <p class="sub" style="margin-bottom:14px">${d} de ${P.ses.length} sesiones hechas</p>
     ${nx?`<div class="bigplay"><button class="btn" onclick="go('${P.id}','${nx.n}')">Ir a la sesión ${esc(nx.n)} →</button></div>`:''}
-    <div class="sgrid">`+P.ses.map(s=>`<button class="stile ${isDone(P.id,s.n)?'done':''} ${nx&&nx.n===s.n?'next':''}" onclick="go('${P.id}','${s.n}')"><b>${esc(s.n)}</b><span>${esc(sesTitle(s))}</span></button>`).join('')+`</div>`;
+    ${P.ses.some(isFlow)?`<div class="fbar"><button class="btn ghost small ${FXOnly?'':'on'}" onclick="FXOnly=false;render()">Todas</button><button class="btn ghost small ${FXOnly?'on':''}" onclick="FXOnly=true;render()">🌀 Solo Flow (${P.ses.filter(isFlow).length})</button><button class="btn ghost small" onclick="openP('flow')">Qué trabaja cada Flow →</button></div>`:''}
+<div class="sgrid">`+P.ses.filter(s=>!FXOnly||isFlow(s)).map(s=>`<button class="stile ${isFlow(s)?'flow':''} ${isDone(P.id,s.n)?'done':''} ${nx&&nx.n===s.n?'next':''}" onclick="go('${P.id}','${s.n}')"><b>${esc(s.n)}</b>${isFlow(s)?'<i class="ftag">FLOW · descanso activo</i>':''}<span>${esc(sesTitle(s))}</span></button>`).join('')+`</div>`;
     return;
   }
   const S=P.ses.find(x=>x.n===view.s);
@@ -166,9 +202,32 @@ function render(){
   <button class="btn ghost" onclick="toggleDone('${P.id}','${S.n}')">${isDone(P.id,S.n)?'Desmarcar como hecha':'Marcar como hecha'}</button>
   ${idx>0?`<button class="btn ghost" onclick="go('${P.id}','${P.ses[idx-1].n}')">← Anterior</button>`:''}
   ${idx<P.ses.length-1?`<button class="btn ghost" onclick="go('${P.id}','${P.ses[idx+1].n}')">Siguiente →</button>`:''}</div>
-  ${S.d?`<div class="desc">${esc(S.d)}</div>`:''}${optsHTML(P)}`+phaseHTML(P,'wu')+S.b.map((b,bi)=>blockHTML(P,S,b,bi)).join('')+phaseHTML(P,'cd');
+  ${isFlow(S)?`<div class="fcard"><h3>🌀 Sesión de Flow · descanso activo</h3><div class="mu">Una sola secuencia de suelo que repites ${flowRounds(S)} veces, con 10 s de descanso entre rondas. No es una sesión de fuerza ni metabólica: es movilidad y control, ideal para días de descanso activo.</div>${flowInfoHTML(flowOf(S))}${EX[FLOWID[flowOf(S)]]&&EX[FLOWID[flowOf(S)]].v?`<a class="btn" style="text-decoration:none;display:inline-block;margin-top:10px;background:#7c5cf0;color:#fff" href="${esc(EX[FLOWID[flowOf(S)]].v)}" target="_blank" rel="noopener">▶ Ver el vídeo del Flow ${flowOf(S)} antes de empezar</a>`:''}</div>`:''}
+  ${S.d?`<div class="desc">${esc(S.d)}</div>`:''}${isFlow(S)?'':optsHTML(P)}`+(isFlow(S)?'':phaseHTML(P,'wu'))+S.b.map((b,bi)=>blockHTML(P,S,b,bi)).join('')+(isFlow(S)?'':phaseHTML(P,'cd'));
+}
+function renderFlow(){
+  const a=$('#app');a.style.setProperty('--c','#7c5cf0');
+  const fs=DATA.progs.map(P=>P.ses.filter(isFlow).map(s=>({P,s}))).flat();
+  const tot=Object.values(FX).reduce((x,y)=>x+y,0);
+  const pre=(n,o)=>`<button class="btn ghost small" onclick='fxPreset(${JSON.stringify(o)})'>${n}</button>`;
+  a.innerHTML=`<div class="top"><button class="back" onclick="go(null,null)">← Menú principal</button><h1>🌀 Flow · descanso activo</h1></div>
+  <p class="sub" style="margin:-8px 0 16px">Secuencias de suelo para movilidad y control en tus días de descanso entre sesiones de fuerza. Aquí tienes dónde están las sesiones del programa, qué trabaja cada flow y un creador para encadenar varios.</p>
+  <div class="block"><div class="bh"><h3>Sesiones de Flow del programa</h3></div><div class="fl">`+fs.map(({P,s})=>`<button class="stile flow ${isDone(P.id,s.n)?'done':''}" onclick="go('${P.id}','${s.n}')"><b>${esc(s.n)}</b><i class="ftag">${esc(P.name)}</i><span>Flow ${flowOf(s)} · ${flowRounds(s)} rondas</span></button>`).join('')+`</div></div>
+  <div class="block"><div class="bh"><h3>Extra · crea tu sesión encadenando flows</h3></div>
+  <div class="mu" style="margin-bottom:10px">Elige cuántas rondas de cada flow. Se encadenan en orden A→E con 10 s de descanso entre rondas y 20 s entre un flow y el siguiente.</div>
+  <div class="fx">`+['A','B','C','D','E'].map(l=>`<div class="fxr"><b>Flow ${l}</b><span class="mu">${FLOWINFO[l].m.includes('tríceps')?'con tríceps':'base'}</span><span style="flex:1"></span><button class="btn ghost small" onclick="fxSet('${l}',-1)">−</button><b class="fxn">${FX[l]}</b><button class="btn ghost small" onclick="fxSet('${l}',1)">+</button></div>`).join('')+`</div>
+  <div class="fbar" style="margin-top:12px">${pre('A→B→C · 3 rondas',{A:3,B:3,C:3})}${pre('Todos · 2 rondas',{A:2,B:2,C:2,D:2,E:2})}${pre('Solo A · 5',{A:5})}${pre('D→E · 4 rondas',{D:4,E:4})}${pre('Vaciar',{})}</div>
+  <div class="bigplay"><button class="btn" style="background:#7c5cf0;color:#fff" ${tot?'':'disabled'} onclick="startFlowExtra()">▶ Empezar sesión de Flow (${tot} ronda${tot==1?'':'s'})</button></div></div>
+  <div class="block"><div class="bh"><h3>Qué trabaja cada Flow</h3></div><div class="mu" style="margin-bottom:8px">Datos del propio programa: según él, solo la A se diferencia en los músculos (no lleva tríceps); las articulaciones son las mismas en las cinco. Lo que cambia entre flows son los movimientos, y eso está en el vídeo de cada uno. Abajo puedes apuntar tus notas para ir alternando.</div>${flowTable()}</div>`;
+}
+function startFlowExtra(){
+  const ls=['A','B','C','D','E'].filter(l=>FX[l]>0);if(!ls.length)return;
+  const b=ls.map((l,li)=>{const s=[];for(let r=1;r<=FX[l];r++){s.push([FLOWID[l],0,1,r]);const last=li===ls.length-1&&r===FX[l];if(!last)s.push([REST,r===FX[l]?20:10,0,r])}return {k:'interval_repetitions_with_pause',s}});
+  const S={n:'extra',t:'',d:'Sesión de Flow extra. Haz cada secuencia el número de rondas indicado. Antes de empezar, revisa el vídeo del flow con el botón «Técnica / vídeo».',b};
+  startGo({id:'flow',name:'Flow extra',ses:[S]},S,0);
 }
 function sesTitle(s){
+  if(isFlow(s))return '🌀 FLOW '+flowOf(s)+' · '+flowRounds(s)+' rondas';
   if(s.t)return s.t;
   const u=[];s.b.forEach(b=>{const t=TYPES[b.k]||'';if(t&&!u.includes(t))u.push(t)});
   return u.slice(0,2).join(' · ')||('Sesión '+s.n);
@@ -256,7 +315,7 @@ function beep(f,d){if(!G||!G.sound)return;try{AC=AC||new (window.AudioContext||w
 async function wake(){try{if(navigator.wakeLock)G.wl=await navigator.wakeLock.request('screen')}catch(e){}}
 function buildSteps(S,from,P){
   const steps=[];
-  const wu=(P&&P.wu&&OPT.wu&&from===0)?P.wu:null,cd=(P&&P.cd&&OPT.cd)?P.cd:null;
+  const fl=isFlow(S),wu=(P&&P.wu&&OPT.wu&&from===0&&!fl)?P.wu:null,cd=(P&&P.cd&&OPT.cd&&!fl)?P.cd:null;
   if(wu)wu.forEach((x,i)=>steps.push({ex:x[0],t:x[1],r:x[2],set:i+1,ns:wu.length,bi:-1,k:'wu',nb:S.b.length,ph:'wu'}));
   S.b.forEach((b,bi)=>{
     if(bi<from)return;
@@ -273,6 +332,9 @@ function buildSteps(S,from,P){
 }
 function startG(pid,sn,from){
   const P=DATA.progs.find(x=>x.id===pid),S=P.ses.find(x=>x.n===sn);
+  startGo(P,S,from);
+}
+function startGo(P,S,from){
   const steps=buildSteps(S,from,P);
   if(!steps.length)return;
   const f=steps.find(s=>s.ex!==REST)||steps[0];
@@ -414,6 +476,7 @@ render();
  const fromHash=()=>{
   const m=/^#?([a-z]+)(?:-(\d+))?$/.exec(location.hash||'');
   if(!m)return {p:null,s:null};
+  if(m[1]==='flow'&&m[2]==null)return {p:'flow',s:null};
   const P=DATA.progs.find(x=>x.id===m[1]);
   if(!P)return {p:null,s:null};
   if(m[2]==null)return {p:P.id,s:null};
