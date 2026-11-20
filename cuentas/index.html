@@ -564,7 +564,7 @@ function toast(msg,deshacer){
   if(deshacer)$('#tUndo').onclick=()=>{deshacer();t.classList.add('hidden')};
   clearTimeout(toastT);toastT=setTimeout(()=>t.classList.add('hidden'),deshacer?6000:3200);
 }
-const APP_V='2026-11-15-v13';
+const APP_V='2026-11-20-v14';
 let focoPrevio=null;
 function bloquearFondo(b){['#app','.nav','header.top'].forEach(s=>{const e=document.querySelector(s);if(e){if(b)e.setAttribute('inert','');else e.removeAttribute('inert')}})}
 function abrir(){
@@ -682,6 +682,44 @@ async function reducirImagen(f,max){
   const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(bm,0,0,c.width,c.height);
   return c.toDataURL('image/jpeg',0.9).split(',')[1];
 }
+
+/* Foto de un ticket sobre una mesa o una tela: se busca el papel, se recorta y se limpia el fondo y la luz para que el lector de Google vea mejor la letra pequeña. Si no se ve claro un papel, no se toca la imagen. */
+async function prepararTicket(bm,max){
+  try{
+    const sw=Math.min(1,300/Math.max(bm.width,bm.height)),w=Math.max(8,Math.round(bm.width*sw)),h=Math.max(8,Math.round(bm.height*sw));
+    const s=document.createElement('canvas');s.width=w;s.height=h;const sg=s.getContext('2d',{willReadFrequently:true});
+    sg.drawImage(bm,0,0,w,h);const d=sg.getImageData(0,0,w,h).data,n=w*h;
+    let g=new Float32Array(n);for(let i=0;i<n;i++)g[i]=.299*d[4*i]+.587*d[4*i+1]+.114*d[4*i+2];
+    for(let pas=0;pas<2;pas++){const o=new Float32Array(n);for(let y=0;y<h;y++)for(let x=0;x<w;x++){let a=0,c=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx>=0&&yy>=0&&xx<w&&yy<h){a+=g[yy*w+xx];c++}}o[y*w+x]=a/c}g=o}
+    const hist=new Array(256).fill(0);for(let i=0;i<n;i++)hist[g[i]|0]++;
+    let sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];let sb=0,wb=0,mx=0,th=128;
+    for(let t=0;t<256;t++){wb+=hist[t];if(!wb)continue;const wf=n-wb;if(!wf)break;sb+=t*hist[t];const mb=sb/wb,mf=(sum-sb)/wf,v=wb*wf*(mb-mf)*(mb-mf);if(v>mx){mx=v;th=t}}
+    const br=new Uint8Array(n);for(let i=0;i<n;i++)br[i]=g[i]>th?1:0;
+    const lab=new Int32Array(n);let mejor=0,mejorN=0,bb=null;const pila=new Int32Array(n);
+    for(let i=0;i<n;i++){if(!br[i]||lab[i])continue;const id=i+1;let sp=0,cnt=0,x0=w,y0=h,x1=0,y1=0;pila[sp++]=i;lab[i]=id;
+      while(sp){const p=pila[--sp],x=p%w,y=(p/w)|0;cnt++;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+        if(x>0&&br[p-1]&&!lab[p-1]){lab[p-1]=id;pila[sp++]=p-1}if(x<w-1&&br[p+1]&&!lab[p+1]){lab[p+1]=id;pila[sp++]=p+1}
+        if(y>0&&br[p-w]&&!lab[p-w]){lab[p-w]=id;pila[sp++]=p-w}if(y<h-1&&br[p+w]&&!lab[p+w]){lab[p+w]=id;pila[sp++]=p+w}}
+      if(cnt>mejorN){mejorN=cnt;mejor=id;bb=[x0,y0,x1,y1]}}
+    if(!bb)return null;
+    const ancho=bb[2]-bb[0]+1,alto=bb[3]-bb[1]+1,ratio=ancho*alto/n,relleno=mejorN/(ancho*alto);
+    if(ratio<.12||ratio>.88||relleno<.45||alto<ancho*1.1)return null; /* un ticket es alto y estrecho */
+    const mx2=Math.round(ancho*.03)+1,my2=Math.round(alto*.02)+1;
+    const sx=Math.max(0,bb[0]-mx2)/w*bm.width,sy=Math.max(0,bb[1]-my2)/h*bm.height,ex=Math.min(w,bb[2]+1+mx2)/w*bm.width,ey=Math.min(h,bb[3]+1+my2)/h*bm.height;
+    const cw=ex-sx,ch=ey-sy,k=Math.min(1,(max||2600)/Math.max(cw,ch));
+    const c=document.createElement('canvas');c.width=Math.round(cw*k);c.height=Math.round(ch*k);
+    const cg=c.getContext('2d',{willReadFrequently:true});cg.fillStyle='#fff';cg.fillRect(0,0,c.width,c.height);cg.drawImage(bm,sx,sy,cw,ch,0,0,c.width,c.height);
+    const foto=c.toDataURL('image/jpeg',.92).split(',')[1];
+    /* fondo suave = la imagen muy reducida y vuelta a estirar; dividir por él iguala la luz y borra sombras */
+    const bc=document.createElement('canvas');bc.width=Math.max(4,Math.round(c.width/18));bc.height=Math.max(4,Math.round(c.height/18));
+    const bg=bc.getContext('2d',{willReadFrequently:true});bg.imageSmoothingQuality='high';bg.drawImage(c,0,0,bc.width,bc.height);
+    const c2=document.createElement('canvas');c2.width=c.width;c2.height=c.height;const g2=c2.getContext('2d',{willReadFrequently:true});g2.imageSmoothingQuality='high';g2.drawImage(bc,0,0,c.width,c.height);
+    const im=cg.getImageData(0,0,c.width,c.height),fo=g2.getImageData(0,0,c.width,c.height),a=im.data,b=fo.data;
+    for(let i=0;i<a.length;i+=4){const v=.299*a[i]+.587*a[i+1]+.114*a[i+2],f=.299*b[i]+.587*b[i+1]+.114*b[i+2]+8;let r=v/f*232;r=r>255?255:r<0?0:r;a[i]=a[i+1]=a[i+2]=r}
+    cg.putImageData(im,0,0);
+    return {foto,ocr:c.toDataURL('image/jpeg',.92).split(',')[1]};
+  }catch(e){return null}
+}
 function leerComoBase64(f){return new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=()=>ko(new Error('No se pudo abrir el archivo'));r.readAsDataURL(f)})}
 async function leerImagen(f){
   if(!f)return;
@@ -690,7 +728,14 @@ async function leerImagen(f){
   if(pdf&&f.size>6e6){toast('El PDF pesa demasiado (máximo 6 MB). Prueba con una captura.');return}
   $('#sheet').innerHTML='<h2>Leyendo…</h2><p class="muted">Suele tardar unos segundos.</p>';abrir();
   let j,b64;
-  try{b64=pdf?await leerComoBase64(f):await reducirImagen(f,2600);j=await llamar({accion:'ocr',imagen:b64,mime:pdf?'application/pdf':'image/jpeg'})}
+  let ocrB64=null;
+  try{
+    if(pdf)b64=await leerComoBase64(f);
+    else{const bm=await createImageBitmap(f,{imageOrientation:'from-image'});const pr=await prepararTicket(bm,2600);if(pr){b64=pr.foto;ocrB64=pr.ocr}else b64=await reducirImagen(f,2600)}
+    j=await llamar({accion:'ocr',imagen:ocrB64||b64,mime:pdf?'application/pdf':'image/jpeg'});
+    /* si la imagen limpia no da nada con sentido, se vuelve a intentar con la foto tal cual */
+    if(ocrB64&&!(parseGenerico(j.texto||'').items.length||(j.ticket&&j.ticket.items&&j.ticket.items.length)||importeDeCompra(j.texto||'')>0)){b64=await reducirImagen(f,2600);j=await llamar({accion:'ocr',imagen:b64,mime:'image/jpeg'})}
+  }
   catch(e){cerrar();toast('No he podido leer el archivo: '+(e.message||e));return}
   if(typeof j.texto!=='string'){cerrar();toast('Falta actualizar el script de Google para leer imágenes');return}
   lec={texto:j.texto,srv:j.ticket,img:{b64,mime:pdf?'application/pdf':'image/jpeg'}};cp=null;
@@ -701,7 +746,11 @@ function numFechaOcr(y,m,d){
   y=+y;if(y<100)y+=2000;m=+m;d=+d;if(m<1||m>12||d<1||d>31)return null;
   const f=y+'-'+pad(m)+'-'+pad(d);return f<'2020-01-01'||f>ymd(new Date(Date.now()+864e5))?null:f;
 }
-function fechaDeTicket(t){const m=String(t).match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}|\d{2})(?!\d)/);return m?numFechaOcr(m[3],m[2],m[1]):null}
+function fechaDeTicket(t){
+  const s=String(t),i=s.match(/(?<!\d)(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})(?!\d)/);
+  if(i){const f=numFechaOcr(i[1],i[2],i[3]);if(f)return f}
+  const m=s.match(/(?<!\d)(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}|\d{2})(?!\d)/);return m?numFechaOcr(m[3],m[2],m[1]):null
+}
 const RUIDO_CABECERA=/BIENVENID|GRACIAS|TICKET|FACTURA|SIMPLIFICAD|NIF|CIF\b|TEL[EÉ]F|^TEL|WWW\.|HTTP|\.COM|\.ES\b|COPIA|CLIENTE|DUPLICADO|ORIGINAL|C\.?P\.?\s*:?\s*\d|CALLE|C\/|AVDA|AVENIDA|PLAZA|OPERADOR|FECHA|HORA|CAJA|VENDEDOR|ATENDID|SERVIDO|HOJA|PEDIDO|MESA|LOCAL|COMPRA|PUNTOS|SOCIO|^[-=*_ .]+$/i;
 function comercioDeTicket(t){
   if(/MERCADONA/i.test(t))return 'Mercadona';
@@ -720,26 +769,48 @@ function comercioDeTicket(t){
 /* Ticket de un comercio cualquiera. El lector de Google a veces separa descripción e importe en líneas distintas: se admiten las dos formas */
 function parseGenerico(texto){
   const SKIP=/TOTAL|SUBTOTAL|IVA\b|I\.V\.A|BASE|CUOTA|ENTREGADO|CAMBIO|EFECTIVO|TARJETA|VISA|MASTERCARD|A PAGAR|FACTURA|TICKET|NIF|CIF|TEL[EÉ]F|FECHA|HORA|^(?:N[.º°]?\s*)?CAJA\b|CAJA\s*:|CAJER[AO]|OPERADOR|GRACIAS|PUNTOS|DESCUENTO|AHORRO|ENV[IÍ]O|^ART[IÍ]CULOS|GASTOS DE|PEDIDO|^DESCRIPCI|^P\. ?UNIT|^IMPORTE|^CANT|^PRECIO|\bOP:/i;
+  const SKIP2=/PINPAD|ATENDID|OPERACI|TERMINAL|REFERENCIA|BANCO|COMERCIO|TITULAR|AUTORIZ|\bCHIP\b|\bTASA\b|\bNETO\b|IMPUESTO|\bBRUTO\b|^ARTICULO|^ART[IÍ]CULO\b|\bAID\b|\bARC\b|SANTANDER|\bBBVA\b|CAIXA|BANKINTER|SIN CONTACTO/i;
   const L=String(texto).split(/\r?\n/).map(l=>l.replace(/\u00a0/g,' ').trim()).filter(Boolean);
   const P='-?\\d{1,4}[.,]\\d{2}(?!\\d)',letras=/[A-Za-zÁÉÍÓÚÑáéíóúñ]{2}/;
   const soloPrecios=new RegExp('^(?:'+P+'\\s*(?:€\\/?\\s*kg|kg|€|EUR|[A-Z])?\\s*){1,3}$','i');
   const finPrecios=new RegExp('^(.*?'+'[A-Za-zÁÉÍÓÚÑáéíóúñ]'+'.*?)\\s+((?:'+P+'\\s*(?:€\\/?\\s*kg|kg|€|EUR)?\\s*){1,3})\\s*[A-Z]?$','i');
   const ultimo=t=>{const m=t.match(new RegExp(P,'g'));return m?parseNum(m[m.length-1]):0};
-  const items=[];let total=null,pend='',espT=false;
+  const items=[];let total=null,pend='',espT=false,cerrado=false;
   const add=(d,imp)=>{
-    const q=d.match(/^(\d{1,2})\s*[xX]?\s+(.+)$/),desc=(q?q[2]:d).replace(/\s+/g,' ').trim();
+    const q=d.match(/^(\d{1,2})\s*[xX]?\s+(.+)$/),desc=(q?q[2]:d).replace(/\s+\d{1,2}$/,'').replace(/\s+/g,' ').trim();
     if(imp>0&&desc.length>=2&&letras.test(desc))items.push({producto:desc,cant:q?+q[1]:1,importe:r2(imp),grupo:''});
   };
   L.forEach(l=>{
-    if(/^(TOTAL|A PAGAR|IMPORTE TOTAL)/i.test(l)){const v=ultimo(l);if(v)total=v;else espT=true;pend='';return}
+    if(/^(TOTAL|A PAGAR|IMPORTE TOTAL)/i.test(l)){const v=ultimo(l);if(v){if(total===null||!items.length||!cerrado)total=v}else espT=true;pend='';if(items.length)cerrado=true;return}
+    if(cerrado){pend='';return}
     if(espT&&soloPrecios.test(l)){total=ultimo(l);espT=false;return}
     espT=false;
-    if(SKIP.test(l)){pend='';return}
+    if(SKIP.test(l)||SKIP2.test(l)){pend='';return}
     if(soloPrecios.test(l)){if(pend)add(pend,ultimo(l));pend='';return}
     const m=l.match(finPrecios);
     if(m){add(m[1],ultimo(m[2]));pend='';return}
     pend=letras.test(l)?l:'';
   });
+  if(total!=null){
+    const suma0=r2(items.reduce((a,i)=>a+i.importe,0));
+    if(!items.length||Math.abs(suma0-total)>=0.02){
+      const ti=L.findIndex((l,i)=>/^(TOTAL|A PAGAR|IMPORTE TOTAL)/i.test(l)&&(new RegExp(P).test(l)||(L[i+1]&&soloPrecios.test(L[i+1]))));
+      const ant=ti>0?L.slice(0,ti):L;let desc=[],run=[];const nums=[];
+      ant.forEach(l=>{
+        if(SKIP.test(l)||SKIP2.test(l)||/^PVP\b|^UD/i.test(l)){if(!desc.length)run=[];return}
+        if(/^\d{1,2}$/.test(l))return;
+        if(soloPrecios.test(l)){if(!desc.length&&run.length)desc=run.slice();if(desc.length)(l.match(new RegExp(P,'g'))||[]).forEach(x=>nums.push(parseNum(x)));return}
+        if(letras.test(l)&&!/\d[.,]\d{2}/.test(l)&&!desc.length&&l.length<=40)run.push(l.replace(/\s+\d{1,2}$/,'').trim());
+      });
+      const N=desc.length;
+      for(const k of [3,2,1]){
+        if(N>=2&&nums.length===k*N){
+          const tot=nums.slice((k-1)*N,k*N);
+          if(Math.abs(r2(tot.reduce((a,v)=>a+v,0))-total)<0.02){items.length=0;desc.forEach((d,i)=>items.push({producto:d,cant:1,importe:r2(tot[i]),grupo:''}));break}
+        }
+      }
+    }
+  }
   return {items,total,ok:false};
 }
 const GRUPO_CAT={'Limpieza y hogar':'casa','Higiene':'farmacia','Suplementos':'suplementacion'};
@@ -749,8 +820,8 @@ function catDeArticulo(d,grupo,def){
   const s=sugerir(d);if(s&&catById(s).grupo==='variable')return s;
   if(!grupo){
     const n=' '+norm(d)+' ';
-    if(/ (DETERG|LEJIA|FREGONA|BAYETA|ESTROPAJO|SUAVIZ|LAVAVAJ|FRIEGA|BOLSA|PILA |AMBIENTADOR)/.test(n)&&ok('casa'))return 'casa';
-    if(/ (CHAMPU|GEL |DENTIF|DESODOR|CEPILLO|COMPRESA|TAMPON|CREMA|JABON)/.test(n)&&ok('farmacia'))return 'farmacia';
+    if(/ (DETERG|LEJIA|FREGONA|BAYETA|ESTROPAJO|SUAVIZ|LAVAV|FRIEGA|BOLSA|PILA |AMBIENTADOR)/.test(n)&&ok('casa'))return 'casa';
+    if(/ (CHAMPU|GEL |DENTIF|DESODOR|CEPILLO|COMPRESA|TAMPON|CREMA (?:FACIAL|SOLAR|HIDRAT|MANOS|CORPORAL|DE MANOS)|JABON)/.test(n)&&ok('farmacia'))return 'farmacia';
   }
   return (def&&catById(def).grupo==='variable'&&ok(def))||ok('super')||ok('extras')||cfg.cats.find(c=>c.grupo==='variable'&&!c.oculta).id;
 }
@@ -856,7 +927,7 @@ function importeDeCompra(texto){
   const c={};todos.forEach(v=>c[v]=(c[v]||0)+1);const rep=todos.filter(v=>c[v]>1);
   return rep.length?Math.max(...rep):Math.max(...todos);
 }
-const MARCAS=/AMAZON|ALIEXPRESS|PAYPAL|ZARA|IKEA|DECATHLON|EL CORTE INGLES|LEROY MERLIN|APPLE|GOOGLE|NETFLIX|SPOTIFY|BOLT|UBER|GLOVO|JUST EAT|RYANAIR|VUELING|BOOKING|PCCOMPONENTES|MEDIAMARKT|WALLAPOP|VINTED|TEMU|SHEIN|BIZUM|REVOLUT/i;
+const MARCAS=/AMAZON|ALIEXPRESS|PAYPAL|ZARA|IKEA|DECATHLON|EL CORTE INGLES|LEROY MERLIN|APPLE|GOOGLE|NETFLIX|SPOTIFY|BOLT|UBER|GLOVO|JUST EAT|RYANAIR|VUELING|BOOKING|PCCOMPONENTES|MEDIAMARKT|WALLAPOP|VINTED|TEMU|SHEIN|BIZUM|REVOLUT|PRIMAPRIX|\bLIDL\b|\bALDI\b|\bCARREFOUR\b|\bALCAMPO\b/i;
 function comercioDeCompra(t){const m=String(t).match(MARCAS);return m?m[0].toLowerCase().replace(/(^|\s)\S/g,s=>s.toUpperCase()):comercioDeTicket(t)}
 const MESES_LARGOS=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 function fechaDeCompra(t){
